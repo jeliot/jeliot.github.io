@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Desmos Graph Performance Comparator</title>
+<style>
+:root {
+  --bg: #0b0d13;
+  --surface: #141721;
+  --surface2: #1b1f2e;
+  --surface3: #222738;
+  --border: #2a2f42;
+  --text: #e2e5ef;
+  --text2: #9499b0;
+  --text3: #636882;
+  --accent: #7b8cff;
+  --accent2: #5c6ce0;
+  --accent-bg: rgba(123,140,255,0.08);
+  --red: #ff6b7a;
+  --red-bg: rgba(255,107,122,0.08);
+  --orange: #ffaa5c;
+  --orange-bg: rgba(255,170,92,0.08);
+  --yellow: #ffd75c;
+  --yellow-bg: rgba(255,215,92,0.06);
+  --green: #5cdb8b;
+  --green-bg: rgba(92,219,139,0.08);
+  --teal: #5cc8d4;
+  --teal-bg: rgba(92,200,212,0.08);
+  --mono: 'SF Mono','Cascadia Code','Fira Code','JetBrains Mono','Consolas',monospace;
+  --sans: 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh}
+.container{max-width:1200px;margin:0 auto;padding:1.5rem}
+
+/* Header */
+.header{text-align:center;padding:2.5rem 0 2rem}
+.header h1{font-size:1.75rem;font-weight:700;letter-spacing:-.03em}
+.header p{color:var(--text2);font-size:.9rem;margin-top:.3rem}
+
+/* Input Section */
+.input-section{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem}
+@media(max-width:740px){.input-section{grid-template-columns:1fr}}
+
+.input-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;position:relative}
+.input-panel .panel-label{display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem}
+.input-panel .panel-label .letter{
+  width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:.85rem;flex-shrink:0;
+}
+.panel-a .letter{background:var(--accent);color:var(--bg)}
+.panel-b .letter{background:var(--teal);color:var(--bg)}
+.input-panel .panel-label span{font-weight:600;font-size:.9rem}
+
+.url-input{
+  width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  color:var(--text);font-family:var(--mono);font-size:.82rem;padding:.65rem .85rem;
+  outline:none;transition:border-color .15s;
+}
+.url-input:focus{border-color:var(--accent)}
+.url-input::placeholder{color:var(--text3)}
+
+.toggle-paste{
+  display:inline-flex;align-items:center;gap:.35rem;margin-top:.5rem;
+  font-size:.78rem;color:var(--text3);cursor:pointer;background:none;border:none;
+  transition:color .15s;
+}
+.toggle-paste:hover{color:var(--text2)}
+.toggle-paste svg{width:14px;height:14px}
+
+.paste-area{
+  display:none;margin-top:.5rem;
+}
+.paste-area.show{display:block}
+.paste-area textarea{
+  width:100%;height:140px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:var(--radius-sm);color:var(--text);font-family:var(--mono);font-size:.75rem;
+  padding:.65rem;outline:none;resize:vertical;
+}
+.paste-area textarea:focus{border-color:var(--accent)}
+.paste-area .hint{font-size:.72rem;color:var(--text3);margin-top:.3rem}
+
+.actions{text-align:center;margin-bottom:2rem}
+.btn-compare{
+  background:var(--accent);color:#fff;border:none;padding:.7rem 2.5rem;border-radius:var(--radius-sm);
+  font-size:.9rem;font-weight:600;cursor:pointer;transition:background .15s,transform .1s;
+  font-family:var(--sans);
+}
+.btn-compare:hover{background:var(--accent2)}
+.btn-compare:active{transform:scale(.97)}
+.btn-compare:disabled{opacity:.4;cursor:not-allowed}
+
+.loading{display:none;text-align:center;padding:2rem;color:var(--text2);font-size:.9rem}
+.loading.show{display:block}
+.loading .spinner{
+  width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .7s linear infinite;margin:0 auto .75rem;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.error-msg{
+  display:none;text-align:center;padding:1rem;color:var(--red);font-size:.85rem;
+  background:var(--red-bg);border-radius:var(--radius-sm);margin-bottom:1rem;
+}
+.error-msg.show{display:block}
+
+/* Results */
+#results{display:none}
+#results.show{display:block}
+
+.results-header{text-align:center;margin-bottom:2rem;padding-top:1rem;border-top:1px solid var(--border)}
+.results-header h2{font-size:1.35rem;font-weight:700}
+
+/* Overview Cards */
+.overview-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.75rem;margin-bottom:2rem;
+}
+.ov-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:1rem;text-align:center;
+}
+.ov-card .metric{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:.5rem}
+.ov-card .values{display:flex;justify-content:center;gap:.75rem;align-items:baseline}
+.ov-card .val{font-family:var(--mono);font-size:1.4rem;font-weight:700}
+.ov-card .val.a{color:var(--accent)}
+.ov-card .val.b{color:var(--teal)}
+.ov-card .vs{color:var(--text3);font-size:.75rem}
+.ov-card .verdict{font-size:.7rem;margin-top:.35rem;font-weight:600}
+.verdict-better{color:var(--green)}
+.verdict-worse{color:var(--red)}
+.verdict-same{color:var(--text3)}
+
+/* Detailed Comparison */
+.detail-section{margin-bottom:2rem}
+.detail-section h3{font-size:1.05rem;font-weight:700;margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem}
+.detail-section h3 .ico{font-size:1rem}
+
+.comp-table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.comp-table th{
+  background:var(--surface2);text-align:left;padding:.6rem .85rem;font-size:.72rem;
+  text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;border-bottom:1px solid var(--border);
+}
+.comp-table th.col-a{color:var(--accent);text-align:center}
+.comp-table th.col-b{color:var(--teal);text-align:center}
+.comp-table th.col-v{text-align:center}
+.comp-table td{padding:.55rem .85rem;border-bottom:1px solid rgba(42,47,66,.4);font-size:.84rem}
+.comp-table td.center{text-align:center;font-family:var(--mono);font-size:.85rem}
+.comp-table tr:last-child td{border-bottom:none}
+.comp-table .metric-name{color:var(--text2)}
+.comp-table .highlight-worse{color:var(--red);font-weight:600}
+.comp-table .highlight-better{color:var(--green);font-weight:600}
+.comp-table .highlight-neutral{color:var(--text)}
+
+/* Performance Score */
+.score-section{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:2rem}
+@media(max-width:640px){.score-section{grid-template-columns:1fr}}
+.score-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;text-align:center}
+.score-card .score-label{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:.5rem}
+.score-ring{width:100px;height:100px;margin:0 auto .75rem;position:relative}
+.score-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.score-ring circle{fill:none;stroke-width:8;stroke-linecap:round}
+.score-ring .bg{stroke:var(--surface3)}
+.score-ring .fg{transition:stroke-dashoffset .8s ease}
+.score-ring .score-text{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  font-family:var(--mono);font-size:1.5rem;font-weight:700;
+}
+.score-card .score-desc{font-size:.8rem;color:var(--text2)}
+
+/* Warnings */
+.warnings-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:2rem}
+@media(max-width:640px){.warnings-grid{grid-template-columns:1fr}}
+.warnings-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem}
+.warnings-panel .wp-title{font-size:.85rem;font-weight:600;margin-bottom:.75rem;display:flex;align-items:center;gap:.4rem}
+.wp-title .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.panel-a .dot{background:var(--accent)}
+.panel-b .dot{background:var(--teal)}
+.warning-item{
+  padding:.55rem .75rem;border-radius:var(--radius-sm);margin-bottom:.4rem;font-size:.82rem;
+  display:flex;align-items:flex-start;gap:.5rem;
+}
+.warning-item.critical{background:var(--red-bg);border-left:3px solid var(--red)}
+.warning-item.high{background:var(--orange-bg);border-left:3px solid var(--orange)}
+.warning-item.medium{background:var(--yellow-bg);border-left:3px solid var(--yellow)}
+.warning-item.low{background:var(--green-bg);border-left:3px solid var(--green)}
+.warning-item .wi-badge{
+  font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+  padding:.1em .4em;border-radius:3px;white-space:nowrap;flex-shrink:0;margin-top:.1rem;
+}
+.warning-item.critical .wi-badge{background:var(--red);color:var(--bg)}
+.warning-item.high .wi-badge{background:var(--orange);color:var(--bg)}
+.warning-item.medium .wi-badge{background:var(--yellow);color:var(--bg)}
+.warning-item.low .wi-badge{background:var(--green);color:var(--bg)}
+
+/* Expression breakdown */
+.expr-section{margin-bottom:2rem}
+.expr-section h3{font-size:1.05rem;font-weight:700;margin-bottom:.75rem}
+.expr-panels{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem}
+@media(max-width:640px){.expr-panels{grid-template-columns:1fr}}
+.expr-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.expr-panel .ep-header{
+  padding:.75rem 1rem;background:var(--surface2);font-size:.85rem;font-weight:600;
+  display:flex;align-items:center;gap:.4rem;cursor:pointer;user-select:none;
+}
+.expr-panel .ep-body{max-height:400px;overflow-y:auto;display:none}
+.expr-panel.open .ep-body{display:block}
+.expr-panel .ep-body table{width:100%;border-collapse:collapse}
+.expr-panel .ep-body th{
+  position:sticky;top:0;background:var(--surface);padding:.45rem .65rem;text-align:left;
+  font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);
+  border-bottom:1px solid var(--border);font-weight:600;
+}
+.expr-panel .ep-body td{
+  padding:.4rem .65rem;border-bottom:1px solid rgba(42,47,66,.3);
+  font-size:.78rem;vertical-align:top;
+}
+.expr-panel .ep-body .latex-cell{font-family:var(--mono);font-size:.72rem;color:var(--accent);word-break:break-all}
+.expr-panel .ep-body .folder-cell{font-size:.68rem;color:var(--text3)}
+.chevron{transition:transform .2s;color:var(--text3);margin-left:auto}
+.expr-panel.open .chevron{transform:rotate(180deg)}
+
+footer{text-align:center;padding:2rem 0 1rem;color:var(--text3);font-size:.75rem;border-top:1px solid var(--border)}
+footer a{color:var(--accent);text-decoration:none}
+footer a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>Desmos Graph Performance Comparator</h1>
+    <p>Paste two Desmos graph links to analyze and compare their performance characteristics</p>
+  </div>
+
+  <div class="input-section">
+    <div class="input-panel panel-a">
+      <div class="panel-label"><div class="letter">A</div><span>Graph A</span></div>
+      <input class="url-input" id="url-a" type="text" placeholder="https://www.desmos.com/calculator/..." spellcheck="false">
+      <button class="toggle-paste" onclick="togglePaste('a')">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3.5 2a.5.5 0 00-.5.5v11a.5.5 0 00.5.5h9a.5.5 0 00.5-.5v-11a.5.5 0 00-.5-.5h-2a.5.5 0 010-1h2A1.5 1.5 0 0114 2.5v11a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 012 13.5v-11A1.5 1.5 0 013.5 1h2a.5.5 0 010 1h-2z"/><path d="M6 1.5A1.5 1.5 0 017.5 0h1A1.5 1.5 0 0110 1.5v1A1.5 1.5 0 018.5 4h-1A1.5 1.5 0 016 2.5v-1z"/></svg>
+        Or paste graph state JSON
+      </button>
+      <div class="paste-area" id="paste-a">
+        <textarea id="json-a" placeholder='Paste graph state JSON here...'></textarea>
+        <div class="hint">Open graph in Desmos &rarr; browser console &rarr; type <code>JSON.stringify(Calc.getState())</code></div>
+      </div>
+    </div>
+    <div class="input-panel panel-b">
+      <div class="panel-label"><div class="letter">B</div><span>Graph B</span></div>
+      <input class="url-input" id="url-b" type="text" placeholder="https://www.desmos.com/calculator/..." spellcheck="false">
+      <button class="toggle-paste" onclick="togglePaste('b')">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3.5 2a.5.5 0 00-.5.5v11a.5.5 0 00.5.5h9a.5.5 0 00.5-.5v-11a.5.5 0 00-.5-.5h-2a.5.5 0 010-1h2A1.5 1.5 0 0114 2.5v11a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 012 13.5v-11A1.5 1.5 0 013.5 1h2a.5.5 0 010 1h-2z"/><path d="M6 1.5A1.5 1.5 0 017.5 0h1A1.5 1.5 0 0110 1.5v1A1.5 1.5 0 018.5 4h-1A1.5 1.5 0 016 2.5v-1z"/></svg>
+        Or paste graph state JSON
+      </button>
+      <div class="paste-area" id="paste-b">
+        <textarea id="json-b" placeholder='Paste graph state JSON here...'></textarea>
+        <div class="hint">Open graph in Desmos &rarr; browser console &rarr; type <code>JSON.stringify(Calc.getState())</code></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-compare" id="btn-compare" onclick="runComparison()">Compare Graphs</button>
+  </div>
+
+  <div class="error-msg" id="error-msg"></div>
+  <div class="loading" id="loading"><div class="spinner"></div>Fetching and analyzing graphs&hellip;</div>
+
+  <div id="results"></div>
+</div>
+
+<script>
+/* ── Utilities ── */
+function togglePaste(id) {
+  document.getElementById('paste-' + id).classList.toggle('show');
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+function clearError() {
+  document.getElementById('error-msg').classList.remove('show');
+}
+
+function extractHash(url) {
+  url = url.trim();
+  const m = url.match(/desmos\.com\/calculator\/([a-z0-9]+)/i);
+  return m ? m[1] : null;
+}
+
+/* ── Graph Fetching ── */
+const PROXIES = [
+  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+  u => 'https://corsproxy.io/?' + encodeURIComponent(u),
+];
+
+async function fetchViaProxy(url) {
+  for (const mkProxy of PROXIES) {
+    try {
+      const r = await fetch(mkProxy(url), { signal: AbortSignal.timeout(12000) });
+      if (r.ok) return await r.text();
+    } catch {}
+  }
+  return null;
+}
+
+async function fetchGraphState(hash) {
+  const pageUrl = 'https://www.desmos.com/calculator/' + hash;
+  const html = await fetchViaProxy(pageUrl);
+  if (!html) return null;
+
+  const m = html.match(/data-load-data="([^"]+)"/);
+  if (!m) return null;
+
+  const decoded = m[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+  let loadData;
+  try { loadData = JSON.parse(decoded); } catch { return null; }
+
+  const stateUrl = loadData?.graph?.stateUrl;
+  if (!stateUrl) return null;
+
+  const stateText = await fetchViaProxy(stateUrl);
+  if (!stateText) return null;
+
+  try { return JSON.parse(stateText); } catch { return null; }
+}
+
+async function getGraphState(urlInputId, jsonInputId) {
+  const jsonRaw = document.getElementById(jsonInputId).value.trim();
+  if (jsonRaw) {
+    try { return JSON.parse(jsonRaw); } catch { throw new Error('Invalid JSON pasted for this graph.'); }
+  }
+  const url = document.getElementById(urlInputId).value.trim();
+  if (!url) throw new Error('Please provide a URL or paste the graph state JSON.');
+  const hash = extractHash(url);
+  if (!hash) throw new Error('Could not parse a Desmos graph hash from: ' + url);
+  const state = await fetchGraphState(hash);
+  if (!state) throw new Error(
+    'Could not fetch graph "' + hash + '". CORS may be blocking the request. ' +
+    'Try pasting the JSON instead: open the graph, press F12, type Calc.getState() in the console, ' +
+    'copy the result, and paste it in the JSON field.'
+  );
+  return state;
+}
+
+/* ── Analysis Engine ── */
+function analyzeGraph(state) {
+  const items = state?.expressions?.list || [];
+  const a = {
+    title: 'Unknown',
+    expressionCount: 0,
+    visibleExprCount: 0,
+    folderCount: 0,
+    imageCount: 0,
+    textCount: 0,
+    sliderCount: 0,
+    draggableCount: 0,
+    actionCount: 0,
+    regressionCount: 0,
+    recursiveDefCount: 0,
+    listComprehensionCount: 0,
+    summationCount: 0,
+    polygonOpCount: 0,
+    piecewiseCount: 0,
+    withClauseCount: 0,
+    joinOpCount: 0,
+    hiddenComputeCount: 0,
+    functionDefCount: 0,
+    totalLatexChars: 0,
+    maxLatexLen: 0,
+    maxLatexExpr: '',
+    largeListCount: 0,
+    avgLatexLen: 0,
+    folders: {},
+    expressions: [],
+    images: [],
+    warnings: [],
+    score: 100,
+  };
+
+  const folderMap = {};
+  for (const it of items) {
+    if (it.type === 'folder') {
+      a.folderCount++;
+      folderMap[it.id] = { title: it.title, hidden: !!it.hidden };
+    }
+  }
+  a.folders = folderMap;
+
+  for (const it of items) {
+    if (it.type === 'text') { a.textCount++; continue; }
+    if (it.type === 'folder') continue;
+    if (it.type === 'image') {
+      a.imageCount++;
+      if (it.draggable) a.draggableCount++;
+      a.images.push(it);
+      continue;
+    }
+    if (it.type !== 'expression') continue;
+
+    a.expressionCount++;
+    const ltx = it.latex || '';
+    if (!it.hidden) a.visibleExprCount++;
+    if (it.hidden && ltx) a.hiddenComputeCount++;
+
+    if (it.slider) a.sliderCount++;
+    if (it.dragMode === 'XY') a.draggableCount++;
+
+    a.totalLatexChars += ltx.length;
+    if (ltx.length > a.maxLatexLen) { a.maxLatexLen = ltx.length; a.maxLatexExpr = ltx.slice(0, 120); }
+    if (ltx.length > 2000) a.largeListCount++;
+
+    if (/\\to(?![a-z])/.test(ltx)) a.actionCount++;
+    if (it.residualVariable) a.regressionCount++;
+    if (/\\operatorname\{for\}/.test(ltx)) a.listComprehensionCount++;
+    if (/\\sum|\\operatorname\{total\}/.test(ltx)) a.summationCount++;
+    if (/\\operatorname\{polygon\}/.test(ltx)) a.polygonOpCount++;
+    if (/\\left\\\{/.test(ltx)) a.piecewiseCount++;
+    if (/\\operatorname\{with\}/.test(ltx)) a.withClauseCount++;
+    if (/\\operatorname\{join\}/.test(ltx)) a.joinOpCount++;
+
+    const fnMatch = ltx.match(/^([a-zA-Z](?:_\{[^}]+\})?)\s*\\left\(([^)]*?)\\right\)\s*=/);
+    if (fnMatch) {
+      a.functionDefCount++;
+      const fnName = fnMatch[1];
+      const body = ltx.slice(ltx.indexOf('=') + 1);
+      if (body.includes(fnName + '\\left(') || body.includes(fnName + '(')) {
+        a.recursiveDefCount++;
+      }
+    }
+
+    a.expressions.push({
+      id: it.id,
+      latex: ltx,
+      folderId: it.folderId,
+      hidden: !!it.hidden,
+      hasSlider: !!it.slider,
+      dragMode: it.dragMode,
+    });
+  }
+
+  a.avgLatexLen = a.expressionCount > 0 ? Math.round(a.totalLatexChars / a.expressionCount) : 0;
+
+  generateWarnings(a);
+  a.score = computeScore(a);
+  return a;
+}
+
+function generateWarnings(a) {
+  const w = a.warnings;
+  if (a.recursiveDefCount > 0)
+    w.push({ level: 'critical', text: `${a.recursiveDefCount} recursive definition(s) found. Each recursion step compounds computation cost per frame.` });
+  if (a.largeListCount > 0)
+    w.push({ level: 'critical', text: `${a.largeListCount} expression(s) with >2000 characters of LaTeX, likely large hardcoded data lists. These consume memory and slow parsing.` });
+  if (a.draggableCount > 2)
+    w.push({ level: 'high', text: `${a.draggableCount} draggable elements. Each drag event triggers recalculation of all dependent expressions.` });
+  if (a.imageCount > 5)
+    w.push({ level: 'high', text: `${a.imageCount} images. Each image requires rendering and position computation.` });
+  if (a.listComprehensionCount > 3)
+    w.push({ level: 'high', text: `${a.listComprehensionCount} list comprehensions (for loops). These generate lists that may be large.` });
+  if (a.hiddenComputeCount > 20)
+    w.push({ level: 'medium', text: `${a.hiddenComputeCount} hidden expressions that still compute. Hidden folders do not skip evaluation.` });
+  if (a.polygonOpCount > 5)
+    w.push({ level: 'medium', text: `${a.polygonOpCount} polygon operations. Polygons with many vertices are rendering-intensive.` });
+  if (a.summationCount > 3)
+    w.push({ level: 'medium', text: `${a.summationCount} summation/total operations. Large sums iterate over entire lists each frame.` });
+  if (a.piecewiseCount > 10)
+    w.push({ level: 'low', text: `${a.piecewiseCount} piecewise expressions. High branching can slow evaluation.` });
+  if (a.expressionCount > 100)
+    w.push({ level: 'low', text: `${a.expressionCount} total expressions. Large expression counts increase evaluation overhead.` });
+  if (a.withClauseCount > 5)
+    w.push({ level: 'low', text: `${a.withClauseCount} "with" clauses. These introduce scoped sub-computations.` });
+  if (w.length === 0)
+    w.push({ level: 'low', text: 'No significant performance concerns detected.' });
+}
+
+function computeScore(a) {
+  let s = 100;
+  s -= a.recursiveDefCount * 18;
+  s -= a.largeListCount * 12;
+  s -= Math.max(0, a.draggableCount - 1) * 6;
+  s -= Math.max(0, a.imageCount - 3) * 3;
+  s -= a.listComprehensionCount * 4;
+  s -= a.summationCount * 3;
+  s -= Math.max(0, a.expressionCount - 50) * 0.15;
+  s -= Math.max(0, a.hiddenComputeCount - 10) * 0.5;
+  s -= a.polygonOpCount * 1.5;
+  s -= a.avgLatexLen * 0.02;
+  return Math.max(0, Math.min(100, Math.round(s)));
+}
+
+function scoreColor(s) {
+  if (s >= 75) return 'var(--green)';
+  if (s >= 50) return 'var(--yellow)';
+  if (s >= 25) return 'var(--orange)';
+  return 'var(--red)';
+}
+
+function scoreLabel(s) {
+  if (s >= 75) return 'Good';
+  if (s >= 50) return 'Fair';
+  if (s >= 25) return 'Poor';
+  return 'Critical';
+}
+
+/* ── Rendering ── */
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function trunc(s, n) { return s.length > n ? s.slice(0, n) + '...' : s; }
+
+function verdictCell(va, vb, lowerBetter = true) {
+  if (va === vb) return '<span class="verdict-same">Tied</span>';
+  const aWins = lowerBetter ? va < vb : va > vb;
+  return aWins
+    ? '<span class="verdict-better">A</span>'
+    : '<span class="verdict-better">B</span>';
+}
+
+function compCellClass(va, vb, lowerBetter = true) {
+  if (va === vb) return 'highlight-neutral';
+  const worse = lowerBetter ? va > vb : va < vb;
+  return worse ? 'highlight-worse' : 'highlight-better';
+}
+
+function renderResults(gA, gB) {
+  const el = document.getElementById('results');
+
+  const metrics = [
+    { name: 'Expressions', a: gA.expressionCount, b: gB.expressionCount, lower: true },
+    { name: 'Images', a: gA.imageCount, b: gB.imageCount, lower: true },
+    { name: 'Draggable Elements', a: gA.draggableCount, b: gB.draggableCount, lower: true },
+    { name: 'Sliders', a: gA.sliderCount, b: gB.sliderCount, lower: true },
+    { name: 'Recursive Defs', a: gA.recursiveDefCount, b: gB.recursiveDefCount, lower: true },
+    { name: 'Functions', a: gA.functionDefCount, b: gB.functionDefCount, lower: true },
+    { name: 'List Comprehensions', a: gA.listComprehensionCount, b: gB.listComprehensionCount, lower: true },
+    { name: 'Summations', a: gA.summationCount, b: gB.summationCount, lower: true },
+    { name: 'Polygon Ops', a: gA.polygonOpCount, b: gB.polygonOpCount, lower: true },
+    { name: 'Piecewise Exprs', a: gA.piecewiseCount, b: gB.piecewiseCount, lower: true },
+    { name: 'Actions', a: gA.actionCount, b: gB.actionCount, lower: true },
+    { name: 'Hidden (Computing)', a: gA.hiddenComputeCount, b: gB.hiddenComputeCount, lower: true },
+    { name: 'Folders', a: gA.folderCount, b: gB.folderCount, lower: true },
+    { name: 'Avg LaTeX Length', a: gA.avgLatexLen, b: gB.avgLatexLen, lower: true },
+    { name: 'Max LaTeX Length', a: gA.maxLatexLen, b: gB.maxLatexLen, lower: true },
+    { name: 'Large Data Lists', a: gA.largeListCount, b: gB.largeListCount, lower: true },
+    { name: 'Join Ops', a: gA.joinOpCount, b: gB.joinOpCount, lower: true },
+    { name: 'With Clauses', a: gA.withClauseCount, b: gB.withClauseCount, lower: true },
+    { name: 'Regressions', a: gA.regressionCount, b: gB.regressionCount, lower: true },
+  ];
+
+  const topMetrics = metrics.slice(0, 6);
+
+  const circum = 2 * Math.PI * 42;
+
+  let html = `
+  <div class="results-header"><h2>Comparison Results</h2></div>
+
+  <!-- Overview Cards -->
+  <div class="overview-grid">
+    ${topMetrics.map(m => `
+      <div class="ov-card">
+        <div class="metric">${esc(m.name)}</div>
+        <div class="values">
+          <span class="val a">${m.a}</span>
+          <span class="vs">vs</span>
+          <span class="val b">${m.b}</span>
+        </div>
+        <div class="verdict">${m.a === m.b ? '<span class="verdict-same">Tied</span>' :
+          (m.lower ? m.a < m.b : m.a > m.b)
+            ? '<span class="verdict-better">A is lighter</span>'
+            : '<span class="verdict-better">B is lighter</span>'
+        }</div>
+      </div>
+    `).join('')}
+  </div>
+
+  <!-- Performance Scores -->
+  <div class="score-section">
+    ${[{g: gA, label: 'Graph A', cls: '--accent'}, {g: gB, label: 'Graph B', cls: '--teal'}].map(({g, label, cls}) => {
+      const offset = circum - (g.score / 100) * circum;
+      return `
+      <div class="score-card">
+        <div class="score-label">${label} Performance Score</div>
+        <div class="score-ring">
+          <svg viewBox="0 0 100 100">
+            <circle class="bg" cx="50" cy="50" r="42"/>
+            <circle class="fg" cx="50" cy="50" r="42"
+              stroke="${scoreColor(g.score)}"
+              stroke-dasharray="${circum}"
+              stroke-dashoffset="${offset}"/>
+          </svg>
+          <div class="score-text" style="color:${scoreColor(g.score)}">${g.score}</div>
+        </div>
+        <div class="score-desc">${scoreLabel(g.score)} &mdash; ${g.expressionCount} expressions, ${g.recursiveDefCount} recursive defs</div>
+      </div>`;
+    }).join('')}
+  </div>
+
+  <!-- Warnings -->
+  <div class="detail-section">
+    <h3><span class="ico">&#9888;&#65039;</span> Performance Warnings</h3>
+  </div>
+  <div class="warnings-grid">
+    ${[{g: gA, label: 'Graph A', cls: 'panel-a'}, {g: gB, label: 'Graph B', cls: 'panel-b'}].map(({g, label, cls}) => `
+      <div class="warnings-panel ${cls}">
+        <div class="wp-title"><div class="dot"></div>${label}</div>
+        ${g.warnings.map(w => `
+          <div class="warning-item ${w.level}">
+            <span class="wi-badge">${w.level}</span>
+            <span>${esc(w.text)}</span>
+          </div>
+        `).join('')}
+      </div>
+    `).join('')}
+  </div>
+
+  <!-- Detailed Metrics Table -->
+  <div class="detail-section">
+    <h3><span class="ico">&#128202;</span> Detailed Metric Comparison</h3>
+    <table class="comp-table">
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th class="col-a" style="width:100px">Graph A</th>
+          <th class="col-b" style="width:100px">Graph B</th>
+          <th class="col-v" style="width:80px">Lighter</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${metrics.map(m => `
+          <tr>
+            <td class="metric-name">${esc(m.name)}</td>
+            <td class="center ${compCellClass(m.a, m.b, m.lower)}">${m.a}</td>
+            <td class="center ${compCellClass(m.b, m.a, m.lower)}">${m.b}</td>
+            <td class="center">${verdictCell(m.a, m.b, m.lower)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Expression Lists -->
+  <div class="expr-section">
+    <h3>Expression Breakdown</h3>
+    <div class="expr-panels">
+      ${[{g: gA, label: 'Graph A', id: 'ea'}, {g: gB, label: 'Graph B', id: 'eb'}].map(({g, label, id}) => `
+        <div class="expr-panel" id="ep-${id}">
+          <div class="ep-header" onclick="document.getElementById('ep-${id}').classList.toggle('open')">
+            ${label} &mdash; ${g.expressionCount} expressions
+            <svg class="chevron" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>
+          </div>
+          <div class="ep-body">
+            <table>
+              <thead><tr><th>ID</th><th>Folder</th><th>LaTeX</th></tr></thead>
+              <tbody>
+                ${g.expressions.map(e => {
+                  const fname = e.folderId && g.folders[e.folderId] ? g.folders[e.folderId].title : '';
+                  return `<tr>
+                    <td>${e.id}</td>
+                    <td class="folder-cell">${esc(trunc(fname, 30))}</td>
+                    <td class="latex-cell">${esc(trunc(e.latex, 100))}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  </div>
+  `;
+
+  el.innerHTML = html;
+  el.classList.add('show');
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ── Main Comparison Flow ── */
+async function runComparison() {
+  clearError();
+  document.getElementById('results').classList.remove('show');
+  const btn = document.getElementById('btn-compare');
+  const loading = document.getElementById('loading');
+
+  btn.disabled = true;
+  loading.classList.add('show');
+
+  try {
+    const [stateA, stateB] = await Promise.all([
+      getGraphState('url-a', 'json-a'),
+      getGraphState('url-b', 'json-b'),
+    ]);
+
+    const analysisA = analyzeGraph(stateA);
+    const analysisB = analyzeGraph(stateB);
+    renderResults(analysisA, analysisB);
+  } catch (err) {
+    showError(err.message || 'An unexpected error occurred.');
+  } finally {
+    btn.disabled = false;
+    loading.classList.remove('show');
+  }
+}
+
+/* ── Allow Enter key on inputs ── */
+document.querySelectorAll('.url-input').forEach(el => {
+  el.addEventListener('keydown', e => { if (e.key === 'Enter') runComparison(); });
+});
+</script>
+
+<footer>
+  Desmos Graph Performance Comparator &mdash; Analyzes graph state to identify complexity and performance concerns
+</footer>
+</body>
+</html>

@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Desmos Graph Analyzer</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-hover: #222632;
+      --border: #2a2e3d;
+      --text: #e4e6ed;
+      --text-muted: #8b8fa3;
+      --accent: #6c7ee1;
+      --accent-glow: rgba(108, 126, 225, 0.15);
+      --red: #e85d6f;
+      --red-glow: rgba(232, 93, 111, 0.12);
+      --orange: #e8a04f;
+      --orange-glow: rgba(232, 160, 79, 0.12);
+      --yellow: #e8d44f;
+      --yellow-glow: rgba(232, 212, 79, 0.10);
+      --green: #4fbe7f;
+      --green-glow: rgba(79, 190, 127, 0.10);
+      --teal: #4fb8c4;
+      --teal-glow: rgba(79, 184, 196, 0.10);
+      --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    header { text-align: center; padding: 3rem 0 2rem; }
+    header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    header .subtitle { color: var(--text-muted); font-size: 0.95rem; }
+
+    /* Input Area */
+    .input-area { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
+    .input-row { display: flex; gap: 0.75rem; }
+    .input-row input { flex: 1; background: var(--surface-hover); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 0.82rem; padding: 0.65rem 0.85rem; outline: none; }
+    .input-row input:focus { border-color: var(--accent); }
+    .input-row input::placeholder { color: #555a6e; }
+    .btn { background: var(--accent); color: #fff; border: none; padding: 0.65rem 2rem; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background 0.15s, transform 0.1s; }
+    .btn:hover { background: #5a69d6; }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .paste-toggle { display: inline-flex; align-items: center; gap: 0.35rem; margin-top: 0.6rem; font-size: 0.78rem; color: #555a6e; cursor: pointer; background: none; border: none; transition: color 0.15s; }
+    .paste-toggle:hover { color: var(--text-muted); }
+    .paste-box { display: none; margin-top: 0.6rem; }
+    .paste-box.show { display: block; }
+    .paste-box textarea { width: 100%; height: 130px; background: var(--surface-hover); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 0.73rem; padding: 0.6rem; outline: none; resize: vertical; }
+    .paste-box textarea:focus { border-color: var(--accent); }
+    .paste-box .hint { font-size: 0.72rem; color: #555a6e; margin-top: 0.3rem; }
+    .paste-box .hint code { background: var(--surface-hover); padding: 0.1em 0.35em; border-radius: 3px; }
+    .err-msg { display: none; padding: 0.85rem 1rem; color: var(--red); font-size: 0.85rem; background: var(--red-glow); border-radius: 6px; margin-bottom: 1rem; }
+    .err-msg.show { display: block; }
+    .loading { display: none; text-align: center; padding: 2.5rem; color: var(--text-muted); font-size: 0.9rem; }
+    .loading.show { display: block; }
+    .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 0.75rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Report Styles (matching index.html) */
+    .severity-banner { display: flex; align-items: center; gap: 0.75rem; padding: 1rem 1.25rem; border-radius: 10px; margin-bottom: 2rem; border: 1px solid; }
+    .severity-banner.critical { background: var(--red-glow); border-color: rgba(232, 93, 111, 0.25); }
+    .severity-banner.warning { background: var(--orange-glow); border-color: rgba(232, 160, 79, 0.25); }
+    .severity-banner.good { background: var(--green-glow); border-color: rgba(79, 190, 127, 0.25); }
+    .severity-banner .icon { font-size: 1.4rem; }
+    .severity-banner .label { font-weight: 600; font-size: 0.95rem; }
+    .severity-banner .label .tag { display: inline-block; padding: 0.1em 0.5em; border-radius: 4px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 0.5rem; }
+    .severity-banner.critical .tag { background: var(--red); color: var(--bg); }
+    .severity-banner.warning .tag { background: var(--orange); color: var(--bg); }
+    .severity-banner.good .tag { background: var(--green); color: var(--bg); }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2.5rem; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; text-align: center; }
+    .stat-card .value { font-size: 2rem; font-weight: 700; font-family: var(--mono); line-height: 1.2; }
+    .stat-card .label { color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.25rem; }
+    .stat-card.red .value { color: var(--red); }
+    .stat-card.orange .value { color: var(--orange); }
+    .stat-card.accent .value { color: var(--accent); }
+    .stat-card.teal .value { color: var(--teal); }
+    section { margin-bottom: 2.5rem; }
+    section h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+    section h2 .section-icon { font-size: 1.2rem; }
+    section > p, section > .desc { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; }
+    .callout { padding: 1rem 1.25rem; border-radius: 8px; border-left: 3px solid; margin: 1rem 0; font-size: 0.88rem; }
+    .callout.red { background: var(--red-glow); border-color: var(--red); }
+    .callout.orange { background: var(--orange-glow); border-color: var(--orange); }
+    .callout.accent { background: var(--accent-glow); border-color: var(--accent); }
+    .callout.green { background: var(--green-glow); border-color: var(--green); }
+    .callout strong { display: block; margin-bottom: 0.25rem; }
+    .expr-inline { font-family: var(--mono); font-size: 0.82em; background: rgba(108, 126, 225, 0.12); padding: 0.1em 0.35em; border-radius: 3px; color: var(--accent); }
+    .legend { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .legend-item { display: flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; color: var(--text-muted); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+    .flow-diagram { background: rgba(0,0,0,0.2); border-radius: 8px; padding: 1.5rem; overflow-x: auto; }
+    .flow-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+    .flow-box { padding: 0.4em 0.75em; border-radius: 6px; font-family: var(--mono); font-size: 0.78rem; font-weight: 600; border: 1px solid; white-space: nowrap; }
+    .flow-box.input { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
+    .flow-box.compute { background: var(--orange-glow); border-color: var(--orange); color: var(--orange); }
+    .flow-box.heavy { background: var(--red-glow); border-color: var(--red); color: var(--red); }
+    .flow-box.output { background: var(--green-glow); border-color: var(--green); color: var(--green); }
+    .flow-box.display { background: var(--teal-glow); border-color: var(--teal); color: var(--teal); }
+    .flow-arrow { color: var(--text-muted); font-size: 1rem; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .card + .card { margin-top: 1rem; }
+    .card-header { padding: 1rem 1.25rem; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; transition: background 0.15s; }
+    .card-header:hover { background: var(--surface-hover); }
+    .card-header h3 { font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+    .badge { display: inline-block; padding: 0.15em 0.55em; border-radius: 5px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .badge.critical { background: var(--red); color: var(--bg); }
+    .badge.high { background: var(--orange); color: var(--bg); }
+    .badge.medium { background: var(--yellow); color: var(--bg); }
+    .badge.low { background: var(--green); color: var(--bg); }
+    .badge.info { background: var(--accent); color: #fff; }
+    .chevron { transition: transform 0.2s; color: var(--text-muted); }
+    .card.open .chevron { transform: rotate(180deg); }
+    .card-body { display: none; padding: 0 1.25rem 1.25rem; }
+    .card.open .card-body { display: block; }
+    .expr-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .expr-table th { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .expr-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid rgba(42, 46, 61, 0.5); vertical-align: top; }
+    .expr-table tr:last-child td { border-bottom: none; }
+    .expr-table .latex { font-family: var(--mono); font-size: 0.8rem; color: var(--accent); word-break: break-all; }
+    .expr-table .folder-tag { font-size: 0.7rem; padding: 0.1em 0.4em; border-radius: 3px; background: rgba(108, 126, 225, 0.12); color: var(--accent); white-space: nowrap; }
+    .cost-bar { display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0; }
+    .cost-track { flex: 1; height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
+    .cost-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+    .cost-label { font-size: 0.75rem; font-family: var(--mono); color: var(--text-muted); min-width: 4ch; text-align: right; }
+    .recommendations { display: flex; flex-direction: column; gap: 0.75rem; }
+    .rec-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.25rem; display: flex; gap: 1rem; align-items: flex-start; }
+    .rec-num { background: var(--accent); color: var(--bg); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; flex-shrink: 0; }
+    .rec-body h4 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .rec-body p { font-size: 0.85rem; color: var(--text-muted); }
+    footer { text-align: center; padding: 2rem 0; color: var(--text-muted); font-size: 0.8rem; border-top: 1px solid var(--border); }
+    @media (max-width: 640px) { header h1 { font-size: 1.5rem; } .summary-grid { grid-template-columns: 1fr 1fr; } .flow-row { font-size: 0.7rem; } .input-row { flex-direction: column; } }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Desmos Graph Analyzer</h1>
+    <p class="subtitle">Paste a Desmos graph link to generate a full performance diagnosis report</p>
+  </header>
+
+  <div class="input-area" id="input-area">
+    <div class="input-row">
+      <input id="url" type="text" placeholder="https://www.desmos.com/calculator/..." spellcheck="false">
+      <button class="btn" id="btn" onclick="run()">Analyze</button>
+    </div>
+    <button class="paste-toggle" onclick="document.getElementById('paste-box').classList.toggle('show')">&#128203; Or paste graph state JSON</button>
+    <div class="paste-box" id="paste-box">
+      <textarea id="json" placeholder="Paste the result of Calc.getState() here..."></textarea>
+      <div class="hint">Open graph in Desmos &rarr; press F12 &rarr; Console &rarr; type <code>JSON.stringify(Calc.getState())</code></div>
+    </div>
+  </div>
+
+  <div class="err-msg" id="err"></div>
+  <div class="loading" id="loading"><div class="spinner"></div>Fetching and analyzing graph&hellip;</div>
+  <div id="report"></div>
+</div>
+
+<script>
+/* ═══════ UTILITIES ═══════ */
+const $ = id => document.getElementById(id);
+const H = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const T = (s,n) => s.length > n ? s.slice(0,n)+'...' : s;
+const ei = s => `<span class="expr-inline">${H(s)}</span>`;
+const chevSvg = '<svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>';
+
+function toggleCard(id) { document.getElementById(id).classList.toggle('open'); }
+
+/* ═══════ FETCHING ═══════ */
+const PX = [
+  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+  u => 'https://corsproxy.io/?' + encodeURIComponent(u),
+];
+async function pFetch(url) {
+  for (const mk of PX) { try { const r = await fetch(mk(url),{signal:AbortSignal.timeout(15000)}); if(r.ok) return await r.text(); } catch{} }
+  return null;
+}
+async function fetchState(hash) {
+  const html = await pFetch('https://www.desmos.com/calculator/'+hash);
+  if(!html) return null;
+  const m = html.match(/data-load-data="([^"]+)"/);
+  if(!m) return null;
+  try { const ld=JSON.parse(m[1].replace(/&quot;/g,'"').replace(/&amp;/g,'&')); const su=ld?.graph?.stateUrl; if(!su)return null; const st=await pFetch(su); return st?JSON.parse(st):null; } catch{return null;}
+}
+async function getState() {
+  const jr=$('json').value.trim();
+  if(jr){try{return JSON.parse(jr)}catch{throw new Error('Invalid JSON pasted.')}}
+  const url=$('url').value.trim();
+  if(!url) throw new Error('Enter a Desmos URL or paste graph state JSON.');
+  const hm=url.match(/desmos\.com\/calculator\/([a-z0-9]+)/i);
+  if(!hm) throw new Error('Could not parse a Desmos graph hash from that URL.');
+  const s=await fetchState(hm[1]);
+  if(!s) throw new Error('Could not fetch the graph (CORS may be blocking). Try pasting the JSON instead: open the graph, press F12, type Calc.getState() in the console, copy the result.');
+  return s;
+}
+
+/* ═══════ LATEX PARSER ═══════ */
+const BUILTINS = new Set('floor,ceil,mod,abs,sign,min,max,median,mean,total,length,count,join,sort,unique,for,with,polygon,distance,midpoint,rgb,hsv,cos,sin,tan,sec,csc,cot,arccos,arcsin,arctan,log,ln,exp,sqrt,nCr,nPr,stdev,var,cov,corr,random,normaldist,tdist,poissondist,binomialdist,uniformdist,pdf,cdf,inversecdf,histogram,boxplot,dotplot,width,height'.split(','));
+
+function findDefEq(l){let d=0,i=0;while(i<l.length){if(l.startsWith('\\left',i)){d++;i+=5;continue}if(l.startsWith('\\right',i)){d=Math.max(0,d-1);i+=6;continue}if(l[i]==='='&&d===0&&i>0&&!'<>!'.includes(l[i-1]))return i;i++}return -1}
+
+function varTokens(l){
+  const v=new Set();
+  let m; const re=/([a-zA-Z])_\{([^}]+)\}/g;
+  while((m=re.exec(l))!==null){if(!BUILTINS.has(m[2]))v.add(m[1]+'_{'+m[2]+'}')}
+  const cl=l.replace(/\\operatorname\{[^}]+\}/g,' ').replace(/\\[a-zA-Z]+/g,' ').replace(/[a-zA-Z]_\{[^}]+\}/g,' ').replace(/[0-9.]+/g,' ');
+  for(const ch of cl){if(/[a-df-wyz]/i.test(ch))v.add(ch)}
+  return v;
+}
+
+function parseExpr(latex){
+  if(!latex)return null;
+  const isAct=/[^<>!]\\to(?![a-z])/.test(latex)||latex.startsWith('\\to')||/^[a-zA-Z](?:_\{[^}]+\})?\\to/.test(latex);
+  if(isAct)return{type:'action',name:null,refs:varTokens(latex),latex};
+  const eq=findDefEq(latex);
+  if(eq===-1)return{type:'display',name:null,refs:varTokens(latex),latex};
+  const lhs=latex.slice(0,eq),rhs=latex.slice(eq+1);
+  let name=null,params=[],isFunc=false,isRec=false;
+  const fm=lhs.match(/^([a-zA-Z](?:_\{[^}]+\})?)\\left\(/);
+  if(fm){name=fm[1];isFunc=true;const pi=lhs.slice(fm[0].length).replace(/\\right\)$/,'');params=[...varTokens(pi)];if(rhs.includes(name+'\\left(')||rhs.includes(name+'('))isRec=true}
+  else{const vm=lhs.match(/^([a-zA-Z](?:_\{[^}]+\})?)/);if(vm)name=vm[1]}
+  const refs=varTokens(rhs);params.forEach(p=>refs.delete(p));if(name)refs.delete(name);
+  return{type:isFunc?'function':'variable',name,refs,isFunc,isRec,params,latex};
+}
+
+/* ═══════ DEPENDENCY GRAPH ═══════ */
+function buildDeps(parsedList){
+  const def={},on={},by={},all=new Set();
+  for(const p of parsedList){if(!p?.name)continue;def[p.name]=p;all.add(p.name)}
+  for(const p of parsedList){if(!p?.name)continue;const d=new Set();for(const r of p.refs)if(def[r]&&r!==p.name)d.add(r);on[p.name]=d;for(const dep of d){if(!by[dep])by[dep]=new Set();by[dep].add(p.name)}}
+  for(const n of all){if(!on[n])on[n]=new Set();if(!by[n])by[n]=new Set()}
+  function trans(n,v=new Set()){if(v.has(n))return v;v.add(n);for(const c of(by[n]||[]))trans(c,v);return v}
+  return{def,on,by,all,trans};
+}
+
+/* ═══════ COST ESTIMATION ═══════ */
+function eCost(p){
+  if(!p)return 1;let c=1;const l=p.latex||'';c+=l.length*0.003;
+  if(p.isRec)c+=30;if(/\\operatorname\{for\}/.test(l))c+=8;if(/\\sum|\\operatorname\{total\}/.test(l))c+=6;
+  if(/\\operatorname\{polygon\}/.test(l))c+=4;if(/\\operatorname\{with\}/.test(l))c+=2;if(/\\operatorname\{join\}/.test(l))c+=2;
+  if(/\\left\\\{/.test(l))c+=1;if(l.length>2000)c+=15;return c;
+}
+
+/* ═══════ FULL ANALYSIS ═══════ */
+function analyze(state){
+  const items=state?.expressions?.list||[];
+  const folders={},exprs=[],images=[],texts=[],parsed=[];
+  const m={expr:0,vis:0,fold:0,img:0,txt:0,slider:0,drag:0,act:0,reg:0,rec:0,listC:0,sum:0,poly:0,pw:0,wth:0,jn:0,hidC:0,fn:0,totCh:0,maxCh:0,maxChE:'',lgList:0};
+
+  for(const it of items)if(it.type==='folder'){m.fold++;folders[it.id]={title:it.title||'',hidden:!!it.hidden}}
+  for(const it of items){
+    if(it.type==='text'){m.txt++;texts.push({text:it.text,fid:it.folderId});continue}
+    if(it.type==='folder')continue;
+    if(it.type==='image'){m.img++;if(it.draggable)m.drag++;images.push(it);continue}
+    if(it.type!=='expression'||!it.latex)continue;
+    m.expr++;const l=it.latex;if(!it.hidden)m.vis++;else m.hidC++;if(it.slider)m.slider++;if(it.dragMode==='XY')m.drag++;
+    m.totCh+=l.length;if(l.length>m.maxCh){m.maxCh=l.length;m.maxChE=l.slice(0,80)}if(l.length>2000)m.lgList++;
+    if(/\\to(?![a-z])/.test(l))m.act++;if(it.residualVariable)m.reg++;
+    if(/\\operatorname\{for\}/.test(l))m.listC++;if(/\\sum|\\operatorname\{total\}/.test(l))m.sum++;
+    if(/\\operatorname\{polygon\}/.test(l))m.poly++;if(/\\left\\\{/.test(l))m.pw++;
+    if(/\\operatorname\{with\}/.test(l))m.wth++;if(/\\operatorname\{join\}/.test(l))m.jn++;
+    const p=parseExpr(l);if(p?.isFunc)m.fn++;if(p?.isRec)m.rec++;
+    parsed.push(p);
+    exprs.push({id:it.id,latex:l,fid:it.folderId,hidden:!!it.hidden,slider:!!it.slider,drag:it.dragMode,p});
+  }
+  m.avgCh=m.expr>0?Math.round(m.totCh/m.expr):0;
+  const dep=buildDeps(parsed);
+
+  const inputs=[];
+  for(const n of dep.all){if(dep.on[n].size===0){
+    const e=exprs.find(x=>x.p?.name===n);
+    const type=e?.slider?'slider':e?.drag==='XY'?'draggable':e?.p?.isFunc?'function':'constant';
+    const aff=dep.trans(n);aff.delete(n);
+    let cost=0;for(const a of aff)cost+=eCost(dep.def[a]);
+    inputs.push({name:n,type,count:aff.size,cost,affected:aff});
+  }}
+  inputs.sort((a,b)=>b.cost-a.cost);
+
+  return{m,folders,exprs,images,texts,parsed,dep,inputs};
+}
+
+/* ═══════ REPORT GENERATOR ═══════ */
+function genReport(a, graphUrl){
+  const{m,folders,exprs,images,texts,dep,inputs}=a;
+  let html='';
+  const score=Math.max(0,Math.min(100,Math.round(100-m.rec*18-m.lgList*12-Math.max(0,m.drag-1)*5-Math.max(0,m.img-3)*2.5-m.listC*3.5-m.sum*3-Math.max(0,m.expr-50)*0.15-Math.max(0,m.hidC-10)*0.4-m.poly*1.5-m.avgCh*0.015)));
+  const primary=inputs[0];
+  const recExprs=exprs.filter(e=>e.p?.isRec);
+  const fnames=Object.values(folders).map(f=>f.title.toLowerCase());
+
+  /* ── Header ── */
+  const urlLink = graphUrl ? ` &mdash; <a href="${H(graphUrl)}" target="_blank">${H(graphUrl.split('/').pop())}</a>` : '';
+  html+=`<header><h1>Desmos Graph Performance Diagnosis</h1><p class="subtitle">Auto-generated analysis${urlLink}</p></header>`;
+
+  /* ── Severity Banner ── */
+  const sev=score<30?'critical':score<60?'warning':'good';
+  const sevLabel=score<30?'Performance Issues Identified':score<60?'Moderate Performance Concerns':'Graph Looks Healthy';
+  let sevDesc='';
+  if(primary&&primary.count>5){
+    sevDesc=`Changing ${ei(primary.name)} triggers recalculation of <strong>${primary.count} expressions</strong>`;
+    if(m.rec>0)sevDesc+=`, including ${m.rec} recursive chain(s)`;
+    sevDesc+='.';
+  } else if(m.rec>0){
+    sevDesc=`${m.rec} recursive definition(s) detected, which compound computation cost.`;
+  } else {
+    sevDesc=`${m.expr} expressions with no major bottlenecks detected.`;
+  }
+  html+=`<div class="severity-banner ${sev}"><span class="icon">${sev==='good'?'&#9989;':'&#9888;&#65039;'}</span><span class="label"><span class="tag">${sevLabel}</span>${sevDesc}</span></div>`;
+
+  /* ── Summary Stats ── */
+  const stats=[];
+  if(m.rec>0) stats.push({v:m.rec,l:'Recursive Definition'+(m.rec>1?'s':''),c:'red'});
+  if(primary&&primary.count>3) stats.push({v:primary.count,l:'Exprs Depend on '+primary.name,c:'orange'});
+  stats.push({v:m.expr,l:'Total Expressions',c:'accent'});
+  if(m.img>0) stats.push({v:m.img,l:'Image'+(m.img>1?'s':''),c:'teal'});
+  if(m.drag>0&&stats.length<4) stats.push({v:m.drag,l:'Draggable Element'+(m.drag>1?'s':''),c:'accent'});
+  if(m.poly>0&&stats.length<4) stats.push({v:m.poly,l:'Polygon Operations',c:'teal'});
+  if(m.fn>0&&stats.length<4) stats.push({v:m.fn,l:'Custom Functions',c:'accent'});
+  while(stats.length<4) stats.push({v:m.slider,l:'Sliders',c:'teal'});
+  html+=`<div class="summary-grid">${stats.slice(0,4).map(s=>`<div class="stat-card ${s.c}"><div class="value">${s.v}</div><div class="label">${H(s.l)}</div></div>`).join('')}</div>`;
+
+  /* ── Root Cause / Overview ── */
+  html+=`<section><h2><span class="section-icon">&#128270;</span> Analysis Summary</h2>`;
+  // Graph description
+  let desc=`This graph contains <strong>${m.expr} expressions</strong> across <strong>${m.fold} folders</strong>`;
+  if(m.img>0) desc+=`, uses <strong>${m.img} images</strong>`;
+  if(m.drag>0) desc+=`, and has <strong>${m.drag} draggable element(s)</strong>`;
+  desc+='.';
+  const topics=[];
+  if(fnames.some(f=>/animat|timing|ticker/.test(f)))topics.push('animation');
+  if(fnames.some(f=>/continent|ocean|geo|map|globe/.test(f)))topics.push('geography/map');
+  if(fnames.some(f=>/velocity|vector|field|force/.test(f)))topics.push('vector field simulation');
+  if(fnames.some(f=>/contour|trail|path|particle/.test(f)))topics.push('particle/path tracing');
+  if(fnames.some(f=>/color|palette/.test(f)))topics.push('color theming');
+  if(fnames.some(f=>/toolbar|button|ui/.test(f)))topics.push('UI components');
+  if(fnames.some(f=>/viewport|bound|camera/.test(f)))topics.push('viewport management');
+  if(topics.length>0) desc+=` Key systems include <strong>${topics.join(', ')}</strong>.`;
+  html+=`<div class="callout ${sev==='good'?'green':'accent'}"><strong>Graph Overview</strong>${desc}</div>`;
+
+  // Bottleneck callouts
+  if(m.rec>0){
+    const names=recExprs.map(e=>e.p.name).filter(Boolean);
+    const calledFns=new Set();
+    for(const re of recExprs){
+      for(const r of re.p.refs){const d=dep.def[r];if(d?.isFunc&&!d.isRec)calledFns.add(r)}}
+    let txt=`The expression(s) ${names.map(n=>ei(n)).join(', ')} use recursive definitions&mdash;each step depends on the previous, creating a computation chain.`;
+    if(calledFns.size>0) txt+=` Each step calls ${[...calledFns].slice(0,3).map(n=>ei(n)).join(', ')}, multiplying the cost.`;
+    if(primary&&primary.count>5) txt+=` When ${ei(primary.name)} changes, <strong>the entire chain recomputes from scratch</strong>.`;
+    html+=`<div class="callout red"><strong>Primary Bottleneck: Recursive Computation</strong>${txt}</div>`;
+  }
+  if(m.lgList>0){
+    html+=`<div class="callout orange"><strong>${m.lgList>1?'Large Inline Data Lists':'Large Inline Data List'}</strong>${m.lgList} expression(s) contain over 2,000 characters of LaTeX, likely hardcoded coordinate or vector data. These consume significant memory and slow initial parsing.</div>`;
+  }
+  if(m.img>5){
+    const inames=images.map(i=>i.name||i.description||'').filter(Boolean);
+    html+=`<div class="callout accent"><strong>Rendering Load: ${m.img} Image Instances</strong>${m.img} images are rendered simultaneously${inames.length>0?' (including '+inames.slice(0,3).map(n=>'<strong>'+H(T(n,25))+'</strong>').join(', ')+')':''}. Each requires position computation and GPU rendering per frame.</div>`;
+  }
+  const hidFolders=Object.entries(folders).filter(([id,f])=>f.hidden&&exprs.some(e=>e.fid===id));
+  if(hidFolders.length>0){
+    html+=`<div class="callout orange"><strong>Hidden Folders Still Computing</strong>${hidFolders.length} hidden folder(s) (${hidFolders.slice(0,3).map(([,f])=>ei(f.title)).join(', ')}) contain expressions that are evaluated but never rendered. Desmos does not skip computation for hidden folders.</div>`;
+  }
+  html+=`</section>`;
+
+  /* ── Dependency Flow ── */
+  if(primary&&primary.count>3){
+    html+=`<section><h2><span class="section-icon">&#128200;</span> Dependency Flow for ${ei(primary.name)}</h2>`;
+    html+=`<p class="desc">When ${ei(primary.name)} changes${primary.type==='draggable'?' (drag)':primary.type==='slider'?' (slider)':''}, this is the cascade of recalculation:</p>`;
+    html+=`<div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Input</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div> Compute</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> Heavy</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Output</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--teal)"></div> Display</div>
+    </div>`;
+    html+=`<div class="flow-diagram">`;
+    // Build flow rows from the dependency chain
+    const directKids=[...(dep.by[primary.name]||[])].filter(c=>primary.affected.has(c));
+    directKids.sort((a,b)=>eCost(dep.def[b])-eCost(dep.def[a]));
+    // Row 1: primary input -> direct dependents
+    const topNodes=directKids.slice(0,5);
+    if(topNodes.length>0){
+      html+=`<div class="flow-row"><div class="flow-box input">${H(primary.name)}${primary.type==='draggable'?' (drag)':primary.type==='slider'?' (slider)':''}</div>`;
+      for(const n of topNodes){
+        const p=dep.def[n];const cls=p?.isRec?'heavy':eCost(p)>8?'compute':'output';
+        html+=`<span class="flow-arrow">&rarr;</span><div class="flow-box ${cls}">${H(T(n,25))}</div>`;
+      }
+      if(directKids.length>5) html+=`<span class="flow-arrow">&rarr;</span><div class="flow-box compute">+${directKids.length-5} more</div>`;
+      html+=`</div>`;
+    }
+    // Row 2+: for each heavy/recursive node, show its children
+    for(const n of topNodes){
+      const p=dep.def[n];if(!p)continue;
+      const kids2=[...(dep.by[n]||[])].filter(c=>primary.affected.has(c));
+      if(kids2.length===0&&!p.isRec)continue;
+      html+=`<div class="flow-row" style="padding-left:2.5rem">`;
+      if(p.isRec){
+        html+=`<span class="flow-arrow">&darr;</span><span style="color:var(--text-muted);font-size:0.78rem">recursive &mdash; each step calls:</span>`;
+        html+=`</div><div class="flow-row" style="padding-left:3.5rem">`;
+        const calledFns=[...p.refs].filter(r=>dep.def[r]?.isFunc&&r!==n);
+        for(const fn of calledFns.slice(0,4)){
+          const fc=eCost(dep.def[fn])>8?'heavy':'compute';
+          html+=`<div class="flow-box ${fc}">${H(T(fn,25))}</div><span class="flow-arrow">+</span>`;
+        }
+        if(calledFns.length===0) html+=`<span style="color:var(--text-muted);font-size:0.78rem">self</span>`;
+        else html=html.replace(/<span class="flow-arrow">\+<\/span>$/,'');
+      } else if(kids2.length>0){
+        html+=`<span class="flow-arrow">&darr;</span>`;
+        for(const k of kids2.slice(0,4)){
+          const kp=dep.def[k];const cls=kp?.isRec?'heavy':eCost(kp)>5?'output':'display';
+          html+=`<span class="flow-arrow">&rarr;</span><div class="flow-box ${cls}">${H(T(k,25))}</div>`;
+        }
+        if(kids2.length>4) html+=`<span class="flow-arrow">&rarr;</span><div class="flow-box compute">+${kids2.length-4} more</div>`;
+      }
+      html+=`</div>`;
+    }
+    // Summary row for images
+    const imgCount=images.length;
+    if(imgCount>0){
+      html+=`<hr style="border:none;border-top:1px solid var(--border);margin:0.75rem 0"><div class="flow-row"><div class="flow-box output">Derived data</div><span class="flow-arrow">&rarr;</span><div class="flow-box display">${imgCount} image(s)</div><span class="flow-arrow">&rarr;</span><div class="flow-box display">${m.vis} visible expression(s)</div></div>`;
+    }
+    html+=`</div></section>`;
+  }
+
+  /* ── Expressions by Impact ── */
+  html+=`<section><h2><span class="section-icon">&#9889;</span> Expressions by Performance Impact</h2>`;
+  html+=`<p class="desc">Expressions grouped by their estimated computational cost. Click to expand each group.</p>`;
+
+  const groups=[
+    {id:'crit',badge:'critical',label:'Critical Impact',test:e=>e.p?.isRec||eCost(e.p)>20,items:[]},
+    {id:'high',badge:'high',label:'High Impact',test:e=>eCost(e.p)>6,items:[]},
+    {id:'med',badge:'medium',label:'Medium Impact',test:e=>eCost(e.p)>2.5,items:[]},
+    {id:'low',badge:'low',label:'Low Impact',test:()=>true,items:[]},
+  ];
+  const claimed=new Set();
+  for(const g of groups){for(const e of exprs){if(claimed.has(e.id))continue;if(g.test(e)){g.items.push(e);claimed.add(e.id)}}}
+
+  for(const g of groups){
+    if(g.items.length===0)continue;
+    const open=g.badge==='critical'?' open':'';
+    html+=`<div class="card${open}" id="card-${g.id}"><div class="card-header" onclick="toggleCard('card-${g.id}')"><h3><span class="badge ${g.badge}">${g.badge}</span> ${g.label} &mdash; ${g.items.length} expression(s)</h3>${chevSvg}</div><div class="card-body">`;
+    if(g.badge==='critical'&&g.items.some(e=>e.p?.isRec)){
+      html+=`<p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem">These expressions have the highest per-frame cost. Recursive definitions recompute their entire chain every time an upstream variable changes.</p>`;
+    }
+    html+=`<table class="expr-table"><thead><tr><th>Name</th><th>LaTeX</th><th>Folder</th><th>Est. Cost</th></tr></thead><tbody>`;
+    for(const e of g.items){
+      const nm=e.p?.name||'(display)';
+      const fn=e.fid&&folders[e.fid]?folders[e.fid].title:'';
+      const cost=eCost(e.p);
+      const cc=cost>20?'var(--red)':cost>8?'var(--orange)':cost>3?'var(--yellow)':'var(--text-muted)';
+      html+=`<tr><td><strong>${H(T(nm,30))}</strong></td><td class="latex">${H(T(e.latex,100))}</td><td>${fn?'<span class="folder-tag">'+H(T(fn,25))+'</span>':''}</td><td style="font-family:var(--mono);font-size:0.8rem;color:${cc};white-space:nowrap">${cost.toFixed(1)}</td></tr>`;
+    }
+    html+=`</tbody></table></div></div>`;
+  }
+  html+=`</section>`;
+
+  /* ── Expensive Functions ── */
+  const funcs=exprs.filter(e=>e.p?.isFunc).sort((a,b)=>eCost(b.p)-eCost(a.p));
+  if(funcs.length>0){
+    const maxC=Math.max(...funcs.map(e=>eCost(e.p)));
+    html+=`<section><h2><span class="section-icon">&#128202;</span> Function Cost Analysis</h2>`;
+    html+=`<p class="desc">Custom functions defined in the graph, ranked by estimated per-call cost.</p>`;
+    html+=`<div class="card open" id="card-funcs"><div class="card-header" onclick="toggleCard('card-funcs')"><h3>Functions (${funcs.length})</h3>${chevSvg}</div><div class="card-body">`;
+    for(const e of funcs.slice(0,15)){
+      const c=eCost(e.p); const pct=maxC>0?Math.round(100*c/maxC):0;
+      const cc=c>20?'var(--red)':c>8?'var(--orange)':c>3?'var(--yellow)':'var(--green)';
+      const tags=[];
+      if(e.p.isRec)tags.push('recursive');
+      if(/\\operatorname\{for\}/.test(e.latex))tags.push('list comp');
+      if(/\\sum|\\operatorname\{total\}/.test(e.latex))tags.push('summation');
+      if(/\\operatorname\{polygon\}/.test(e.latex))tags.push('polygon');
+      if(/\\operatorname\{with\}/.test(e.latex))tags.push('with');
+      html+=`<div style="margin-bottom:1rem">
+        <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:0.25rem">
+          <span>${ei(e.p.name||'?')}${e.p.params.length>0?' ('+e.p.params.join(', ')+')':''} ${tags.map(t=>'<span class="badge '+(t==='recursive'?'critical':'info')+'" style="font-size:0.6rem;margin-left:0.3rem">'+t+'</span>').join('')}</span>
+          <span style="font-family:var(--mono);font-size:0.8rem;color:${cc}">${c.toFixed(1)}</span>
+        </div>
+        <div class="cost-bar"><div class="cost-track"><div class="cost-fill" style="width:${pct}%;background:${cc}"></div></div><span class="cost-label">${pct}%</span></div>
+        <p style="font-size:0.8rem;color:var(--text-muted)">${H(T(e.latex,120))}</p>
+      </div>`;
+    }
+    html+=`</div></div></section>`;
+  }
+
+  /* ── Real-time Expressions ── */
+  html+=`<section><h2><span class="section-icon">&#9200;</span> Real-Time Computation Groups</h2>`;
+  html+=`<p class="desc">Expressions grouped by what triggers their recalculation.</p>`;
+  // Group by trigger
+  const triggerGroups=[];
+  for(const inp of inputs.slice(0,6)){
+    if(inp.count<2)continue;
+    const label=inp.type==='draggable'?`Drag: ${inp.name}`:inp.type==='slider'?`Slider: ${inp.name}`:`Input: ${inp.name}`;
+    triggerGroups.push({label,name:inp.name,count:inp.count,cost:inp.cost,affected:inp.affected});
+  }
+  // Static group
+  const allAffected=new Set();
+  for(const tg of triggerGroups)for(const a of tg.affected)allAffected.add(a);
+  const staticExprs=exprs.filter(e=>e.p?.name&&!allAffected.has(e.p.name));
+  if(staticExprs.length>0) triggerGroups.push({label:'Static / Constants',name:null,count:staticExprs.length,cost:0,affected:new Set(staticExprs.map(e=>e.p.name))});
+
+  for(let i=0;i<triggerGroups.length;i++){
+    const tg=triggerGroups[i];
+    const badgeClass=tg.cost>50?'critical':tg.cost>20?'high':tg.cost>5?'medium':'low';
+    const open=i===0?' open':'';
+    html+=`<div class="card${open}" id="card-tg${i}"><div class="card-header" onclick="toggleCard('card-tg${i}')"><h3><span class="badge ${tg.name?badgeClass:'info'}">${tg.name?badgeClass:'static'}</span> ${H(tg.label)} &mdash; ${tg.count} expression(s)</h3>${chevSvg}</div><div class="card-body">`;
+    if(tg.name){
+      html+=`<p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.5rem">When ${ei(tg.name)} changes, these ${tg.count} expression(s) recalculate. Estimated total cost: <strong style="color:${tg.cost>50?'var(--red)':tg.cost>20?'var(--orange)':'var(--green)'}">${tg.cost.toFixed(1)}</strong></p>`;
+    }
+    html+=`<table class="expr-table"><thead><tr><th>Name</th><th>LaTeX</th><th>Cost</th></tr></thead><tbody>`;
+    const tgExprs=exprs.filter(e=>e.p?.name&&tg.affected.has(e.p.name)).sort((a,b)=>eCost(b.p)-eCost(a.p));
+    for(const e of tgExprs.slice(0,30)){
+      const c=eCost(e.p);const cc=c>20?'var(--red)':c>8?'var(--orange)':c>3?'var(--yellow)':'var(--text-muted)';
+      html+=`<tr><td><strong>${H(T(e.p?.name||'?',30))}</strong></td><td class="latex">${H(T(e.latex,90))}</td><td style="font-family:var(--mono);font-size:0.8rem;color:${cc}">${c.toFixed(1)}</td></tr>`;
+    }
+    if(tgExprs.length>30) html+=`<tr><td colspan="3" style="color:var(--text-muted);font-size:0.82rem">...and ${tgExprs.length-30} more</td></tr>`;
+    html+=`</tbody></table></div></div>`;
+  }
+  html+=`</section>`;
+
+  /* ── Cost Breakdown ── */
+  html+=`<section><h2><span class="section-icon">&#128202;</span> Estimated Cost Breakdown</h2>`;
+  html+=`<p class="desc">Where computation time is spent across expression categories.</p>`;
+  let totalCost=0;for(const e of exprs)totalCost+=eCost(e.p);
+  const cats=[
+    {l:'Recursive Definitions',t:e=>e.p?.isRec,c:'var(--red)'},
+    {l:'List Comprehensions',t:(e)=>/\\operatorname\{for\}/.test(e.latex),c:'var(--orange)'},
+    {l:'Summations / Totals',t:(e)=>/\\sum|\\operatorname\{total\}/.test(e.latex),c:'var(--yellow)'},
+    {l:'Polygon Operations',t:(e)=>/\\operatorname\{polygon\}/.test(e.latex),c:'var(--teal)'},
+    {l:'Large Data Lists',t:(e)=>e.latex.length>2000,c:'var(--accent)'},
+    {l:'All Other Expressions',t:()=>true,c:'var(--text-muted)'},
+  ];
+  const cc2=new Set();
+  html+=`<div class="card open" id="card-cost"><div class="card-header" onclick="toggleCard('card-cost')"><h3>Cost Distribution</h3>${chevSvg}</div><div class="card-body">`;
+  for(const cat of cats){
+    let catC=0;for(const e of exprs){if(cc2.has(e.id))continue;if(cat.t(e)){catC+=eCost(e.p);cc2.add(e.id)}}
+    if(catC===0)continue;
+    const pct=totalCost>0?Math.round(100*catC/totalCost):0;
+    html+=`<div style="margin-bottom:0.75rem"><div style="display:flex;justify-content:space-between;font-size:0.85rem"><span>${H(cat.l)}</span><span style="font-family:var(--mono);color:${cat.c}">~${pct}%</span></div><div class="cost-bar"><div class="cost-track"><div class="cost-fill" style="width:${pct}%;background:${cat.c}"></div></div></div></div>`;
+  }
+  html+=`</div></div></section>`;
+
+  /* ── Recommendations ── */
+  html+=`<section><h2><span class="section-icon">&#128161;</span> Performance Recommendations</h2><div class="recommendations">`;
+  let rn=1;
+  if(m.rec>0){
+    const names=recExprs.map(e=>e.p.name).filter(Boolean);
+    html+=rec(rn++,'Reduce or defer recursive computation',`The recursive definition(s) ${names.map(n=>ei(n)).join(', ')} recompute their entire chain every time an upstream input changes. Consider reducing the recursion depth, or use a Computation Layer action to compute the chain only on drag-end rather than every frame.`);
+  }
+  if(m.lgList>0){
+    html+=rec(rn++,'Optimize large inline data',`${m.lgList} expression(s) contain over 2,000 characters of hardcoded data. Ensure this data is defined once and referenced by name. If any data is unused, remove it to reduce parse time and memory.`);
+  }
+  if(primary&&primary.count>15){
+    html+=rec(rn++,'Decouple heavy computation from interactive input',`${ei(primary.name)} triggers ${primary.count} downstream recalculations. Capture the value into a separate variable on drag-end (via a CL action) so the expensive chain only recomputes once, not on every frame.`);
+  }
+  if(hidFolders.length>0){
+    html+=rec(rn++,'Remove hidden folders that still compute',`${hidFolders.length} hidden folder(s) still evaluate their expressions. If the results are unused, deleting them saves processing: ${hidFolders.slice(0,3).map(([,f])=>ei(f.title)).join(', ')}.`);
+  }
+  if(m.img>5){
+    html+=rec(rn++,'Reduce simultaneous image instances',`${m.img} images render simultaneously. If some are duplicates for wrapping or state-switching, use piecewise conditionals to show only the needed instance.`);
+  }
+  if(m.poly>5){
+    html+=rec(rn++,'Simplify polygon operations',`${m.poly} polygon operations detected. Reduce vertex count for non-critical shapes or combine adjacent polygons to lower rendering cost.`);
+  }
+  if(m.listC>3){
+    html+=rec(rn++,'Cache list comprehension results',`${m.listC} list comprehension(s) regenerate on every input change. Store results in named variables so they compute only once.`);
+  }
+  if(rn===1){
+    html+=rec(rn++,'No major issues detected','This graph appears lightweight with no significant performance bottlenecks. Nice work!');
+  }
+  html+=`</div></section>`;
+
+  /* ── Full Expression Index ── */
+  html+=`<section><h2><span class="section-icon">&#128220;</span> Complete Expression Index</h2>`;
+  html+=`<p class="desc">All ${m.expr} expressions organized by folder.</p>`;
+  const grouped={},orphans=[];
+  for(const e of exprs){if(e.fid&&folders[e.fid]){if(!grouped[e.fid])grouped[e.fid]=[];grouped[e.fid].push(e)}else orphans.push(e)}
+
+  function exprCard(id,title,items,isHidden,startOpen){
+    const oc=startOpen?' open':'';
+    const htag=isHidden?' <span style="opacity:0.4;font-size:0.75rem">(hidden)</span>':'';
+    let h=`<div class="card${oc}" id="card-${id}"><div class="card-header" onclick="toggleCard('card-${id}')"><h3>${H(title)}${htag} &mdash; ${items.length} expr(s)</h3>${chevSvg}</div><div class="card-body"><table class="expr-table"><thead><tr><th>ID</th><th>LaTeX</th><th>Cost</th></tr></thead><tbody>`;
+    for(const e of items){const c=eCost(e.p);const cc=c>20?'var(--red)':c>8?'var(--orange)':c>3?'var(--yellow)':'var(--text-muted)';h+=`<tr><td>${e.id}</td><td class="latex">${H(T(e.latex,110))}</td><td style="font-family:var(--mono);font-size:0.8rem;color:${cc}">${c.toFixed(1)}</td></tr>`}
+    h+=`</tbody></table></div></div>`;return h;
+  }
+
+  if(orphans.length>0) html+=exprCard('f-top','Top-level',orphans,false,false);
+  for(const [fid,f] of Object.entries(folders)){const items=grouped[fid];if(!items||items.length===0)continue;html+=exprCard('f-'+fid,f.title,items,f.hidden,false)}
+  html+=`</section>`;
+
+  html+=`<footer>Auto-generated by Desmos Graph Analyzer</footer>`;
+  return html;
+}
+
+function rec(n,title,text){
+  return `<div class="rec-item"><div class="rec-num">${n}</div><div class="rec-body"><h4>${H(title)}</h4><p>${text}</p></div></div>`;
+}
+
+/* ═══════ MAIN ═══════ */
+async function run(){
+  $('err').classList.remove('show');$('report').innerHTML='';$('report').style.display='none';
+  $('btn').disabled=true;$('loading').classList.add('show');
+  try{
+    const state=await getState();
+    const graphUrl=$('url').value.trim()||null;
+    const a=analyze(state);
+    $('input-area').style.display='none';
+    $('report').innerHTML=genReport(a,graphUrl);
+    $('report').style.display='block';
+    window.scrollTo({top:0,behavior:'smooth'});
+  }catch(e){
+    const el=$('err');el.textContent=e.message||'An error occurred.';el.classList.add('show');
+  }finally{$('btn').disabled=false;$('loading').classList.remove('show')}
+}
+$('url').addEventListener('keydown',e=>{if(e.key==='Enter')run()});
+</script>
+</body>
+</html>
