@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cost Analysis Methodology</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-hover: #222632;
+      --border: #2a2e3d;
+      --text: #e4e6ed;
+      --text-muted: #8b8fa3;
+      --accent: #6c7ee1;
+      --accent-glow: rgba(108, 126, 225, 0.15);
+      --red: #e85d6f;
+      --red-glow: rgba(232, 93, 111, 0.12);
+      --orange: #e8a04f;
+      --orange-glow: rgba(232, 160, 79, 0.12);
+      --yellow: #e8d44f;
+      --yellow-glow: rgba(232, 212, 79, 0.10);
+      --green: #4fbe7f;
+      --green-glow: rgba(79, 190, 127, 0.10);
+      --teal: #4fb8c4;
+      --teal-glow: rgba(79, 184, 196, 0.10);
+      --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .container { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    header { text-align: center; padding: 3rem 0 2.5rem; }
+    header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    header .subtitle { color: var(--text-muted); font-size: 0.95rem; }
+    section { margin-bottom: 2.5rem; }
+    section h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+    section h2 .section-icon { font-size: 1.2rem; }
+    section > p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; line-height: 1.7; }
+    .callout { padding: 1rem 1.25rem; border-radius: 8px; border-left: 3px solid; margin: 1rem 0; font-size: 0.88rem; }
+    .callout.accent { background: var(--accent-glow); border-color: var(--accent); }
+    .callout.orange { background: var(--orange-glow); border-color: var(--orange); }
+    .callout strong { display: block; margin-bottom: 0.25rem; }
+    .expr-inline { font-family: var(--mono); font-size: 0.82em; background: rgba(108, 126, 225, 0.12); padding: 0.1em 0.35em; border-radius: 3px; color: var(--accent); }
+
+    .metric-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .metric-table th { text-align: left; padding: 0.7rem 1rem; border-bottom: 1px solid var(--border); color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; background: var(--surface-hover); }
+    .metric-table td { padding: 0.65rem 1rem; border-bottom: 1px solid rgba(42, 46, 61, 0.5); vertical-align: top; }
+    .metric-table tr:last-child td { border-bottom: none; }
+    .metric-table .val { font-family: var(--mono); font-weight: 700; white-space: nowrap; }
+    .metric-table .val.red { color: var(--red); }
+    .metric-table .val.orange { color: var(--orange); }
+    .metric-table .val.yellow { color: var(--yellow); }
+    .metric-table .val.green { color: var(--green); }
+    .metric-table .val.teal { color: var(--teal); }
+    .metric-table .val.accent { color: var(--accent); }
+    .metric-table .val.muted { color: var(--text-muted); }
+    .metric-table .rationale { color: var(--text-muted); font-size: 0.82rem; }
+
+    .diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem; margin: 1rem 0; }
+    .diagram h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 1rem; }
+    .formula { font-family: var(--mono); font-size: 0.82rem; background: rgba(0,0,0,0.25); border-radius: 6px; padding: 1rem 1.25rem; overflow-x: auto; line-height: 1.8; margin: 0.75rem 0; color: var(--text); }
+    .formula .kw { color: var(--accent); }
+    .formula .num { color: var(--orange); }
+    .formula .op { color: var(--text-muted); }
+    .formula .comment { color: #555a6e; font-style: italic; }
+
+    .cost-bar-demo { display: flex; align-items: center; gap: 0.5rem; margin: 0.35rem 0; }
+    .cost-track { flex: 1; height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; max-width: 200px; }
+    .cost-fill { height: 100%; border-radius: 4px; }
+    .cost-demo-label { font-size: 0.8rem; color: var(--text-muted); min-width: 140px; }
+    .cost-demo-val { font-family: var(--mono); font-size: 0.8rem; min-width: 50px; text-align: right; }
+
+    .flow-box { display: inline-block; padding: 0.3em 0.6em; border-radius: 5px; font-family: var(--mono); font-size: 0.78rem; font-weight: 600; border: 1px solid; margin: 0.1em 0.15em; }
+    .flow-box.red { background: var(--red-glow); border-color: var(--red); color: var(--red); }
+    .flow-box.orange { background: var(--orange-glow); border-color: var(--orange); color: var(--orange); }
+    .flow-box.green { background: var(--green-glow); border-color: var(--green); color: var(--green); }
+    .flow-box.accent { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
+
+    .example-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin: 1rem 0; }
+    .example-card h4 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .example-card .calc { font-family: var(--mono); font-size: 0.82rem; color: var(--text-muted); line-height: 1.8; }
+    .example-card .calc .highlight { color: var(--accent); font-weight: 600; }
+    .example-card .result { font-family: var(--mono); font-size: 1.1rem; font-weight: 700; margin-top: 0.5rem; }
+
+    footer { text-align: center; padding: 2rem 0; color: var(--text-muted); font-size: 0.8rem; border-top: 1px solid var(--border); }
+    @media (max-width: 640px) { header h1 { font-size: 1.5rem; } }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>Cost Analysis Methodology</h1>
+    <p class="subtitle">How the <a href="analyze.html">Desmos Graph Analyzer</a> estimates expression cost and performance scores</p>
+  </header>
+
+  <div class="callout accent">
+    <strong>These are heuristic estimates, not measured timings.</strong>
+    The weights are tuned to surface the patterns that typically cause performance issues in Desmos graphs. The relative ordering is what matters&mdash;an expression scoring 31.0 is far more expensive than one scoring 1.5&mdash;but the numbers do not represent actual milliseconds.
+  </div>
+
+  <!-- Level 1: Per-Expression Cost -->
+  <section>
+    <h2><span class="section-icon">&#9889;</span> Level 1: Per-Expression Cost</h2>
+    <p>Every expression in the graph is assigned an estimated cost by the <span class="expr-inline">eCost()</span> function. The cost starts at a base of <strong>1</strong> and accumulates penalties based on which computational patterns are detected in the LaTeX.</p>
+
+    <table class="metric-table">
+      <thead>
+        <tr><th>Pattern Detected</th><th>Penalty</th><th>Rationale</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Base cost</td>
+          <td class="val muted">+1</td>
+          <td class="rationale">Every expression has some evaluation overhead, even a simple constant like <span class="expr-inline">a = 5</span>.</td>
+        </tr>
+        <tr>
+          <td>LaTeX length</td>
+          <td class="val muted">+0.003 per character</td>
+          <td class="rationale">Longer expressions generally involve more arithmetic operations, more function calls, or inline data. A 200-character expression adds +0.6; a 1000-character one adds +3.0.</td>
+        </tr>
+        <tr>
+          <td>Recursive definition</td>
+          <td class="val red">+30</td>
+          <td class="rationale">By far the heaviest penalty. A recursive expression like <span class="expr-inline">f(n) = g(f(n-1))</span> recomputes its entire chain from the base case on every evaluation. The actual cost multiplies with the recursion depth.</td>
+        </tr>
+        <tr>
+          <td>Large inline data (&gt;2000 chars)</td>
+          <td class="val orange">+15</td>
+          <td class="rationale">Expressions with thousands of characters of LaTeX are typically hardcoded coordinate or vector data. These consume significant memory and slow parsing.</td>
+        </tr>
+        <tr>
+          <td>List comprehension (<span class="expr-inline">for</span>)</td>
+          <td class="val orange">+8</td>
+          <td class="rationale">Generates a list by iterating, e.g., <span class="expr-inline">f(n) for n=[1...50]</span>. Cost scales with list size.</td>
+        </tr>
+        <tr>
+          <td>Summation / <span class="expr-inline">total</span></td>
+          <td class="val yellow">+6</td>
+          <td class="rationale">Iterates over an entire list to produce a sum. Large lists mean more iterations per frame.</td>
+        </tr>
+        <tr>
+          <td>Polygon operation</td>
+          <td class="val teal">+4</td>
+          <td class="rationale">Polygon vertex processing plus GPU rendering. Cost scales with vertex count.</td>
+        </tr>
+        <tr>
+          <td><span class="expr-inline">with</span> clause</td>
+          <td class="val accent">+2</td>
+          <td class="rationale">Introduces a scoped sub-computation, adding evaluation overhead.</td>
+        </tr>
+        <tr>
+          <td><span class="expr-inline">join</span> operation</td>
+          <td class="val accent">+2</td>
+          <td class="rationale">List concatenation that creates a new list in memory.</td>
+        </tr>
+        <tr>
+          <td>Piecewise / conditional (<span class="expr-inline">{...}</span>)</td>
+          <td class="val green">+1</td>
+          <td class="rationale">Branching logic. Individually cheap, but many nested piecewise expressions add up.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="example-card">
+      <h4>Example: Scoring a recursive contour function</h4>
+      <div class="calc">
+        Expression: <span class="expr-inline">c_ontour(n) = p_next(c_ontour(n-1))</span><br><br>
+        <span class="highlight">Base cost:</span> 1.0<br>
+        <span class="highlight">LaTeX length</span> (48 chars &times; 0.003): +0.14<br>
+        <span class="highlight">Recursive definition:</span> +30.0<br>
+        <span class="highlight">No other patterns detected</span>
+      </div>
+      <div class="result" style="color: var(--red);">Total: 31.1</div>
+    </div>
+
+    <div class="example-card">
+      <h4>Example: Scoring a simple constant</h4>
+      <div class="calc">
+        Expression: <span class="expr-inline">n_max = 50</span><br><br>
+        <span class="highlight">Base cost:</span> 1.0<br>
+        <span class="highlight">LaTeX length</span> (10 chars &times; 0.003): +0.03<br>
+        <span class="highlight">No other patterns detected</span>
+      </div>
+      <div class="result" style="color: var(--text-muted);">Total: 1.0</div>
+    </div>
+
+    <p>The resulting cost values are used to color-code expressions throughout the report:</p>
+    <div style="margin: 0.5rem 0 0.5rem 0.5rem;">
+      <div class="cost-bar-demo"><span class="cost-demo-label">Cost &gt; 20</span><div class="cost-track"><div class="cost-fill" style="width:100%;background:var(--red)"></div></div><span class="cost-demo-val" style="color:var(--red)">31.1</span></div>
+      <div class="cost-bar-demo"><span class="cost-demo-label">Cost &gt; 8</span><div class="cost-track"><div class="cost-fill" style="width:50%;background:var(--orange)"></div></div><span class="cost-demo-val" style="color:var(--orange)">12.4</span></div>
+      <div class="cost-bar-demo"><span class="cost-demo-label">Cost &gt; 3</span><div class="cost-track"><div class="cost-fill" style="width:25%;background:var(--yellow)"></div></div><span class="cost-demo-val" style="color:var(--yellow)">5.2</span></div>
+      <div class="cost-bar-demo"><span class="cost-demo-label">Cost &le; 3</span><div class="cost-track"><div class="cost-fill" style="width:8%;background:var(--text-muted)"></div></div><span class="cost-demo-val" style="color:var(--text-muted)">1.0</span></div>
+    </div>
+  </section>
+
+  <!-- Level 2: Per-Input Triggered Cost -->
+  <section>
+    <h2><span class="section-icon">&#128279;</span> Level 2: Per-Input Triggered Cost</h2>
+    <p>For each <strong>input variable</strong> (sliders, draggable points, constants with no upstream dependencies), the analyzer computes the <strong>total cost of everything downstream</strong>&mdash;every expression that would need to recalculate when that input changes.</p>
+
+    <div class="diagram">
+      <h3>How it works</h3>
+      <ol style="color: var(--text-muted); font-size: 0.88rem; padding-left: 1.25rem; line-height: 2;">
+        <li><strong style="color:var(--text)">Identify inputs</strong> &mdash; Find all variables with zero upstream dependencies (nothing feeds into them).</li>
+        <li><strong style="color:var(--text)">Walk the dependency graph transitively</strong> &mdash; From each input, follow every edge in the <span class="expr-inline">dependedBy</span> graph to collect all downstream expressions.</li>
+        <li><strong style="color:var(--text)">Sum their costs</strong> &mdash; Add up the <span class="expr-inline">eCost()</span> of every affected expression to get the total triggered cost.</li>
+        <li><strong style="color:var(--text)">Rank inputs</strong> &mdash; Sort by total cost descending. The highest-cost input is the primary performance bottleneck.</li>
+      </ol>
+    </div>
+
+    <div class="example-card">
+      <h4>Example: Variable <span class="expr-inline">a</span> in the ocean current graph</h4>
+      <div class="calc">
+        <span class="highlight">Affected expressions:</span> 28<br>
+        <span class="highlight">Includes:</span> recursive contour (31.1), trail list (9.2), polygon checks &times;6 (4.0 each), images &times;7 (1.0 each), ...<br>
+        <span class="highlight">Sum:</span> 31.1 + 9.2 + 24.0 + 7.0 + ... = <strong style="color:var(--red)">~142</strong>
+      </div>
+      <div class="result" style="color: var(--red);">Total triggered cost: ~142</div>
+      <p style="font-size:0.82rem; color:var(--text-muted); margin-top:0.5rem;">This means every time the user moves the duck (changing <span class="expr-inline">a</span>), ~142 units of computation fire. That's why dragging feels laggy.</p>
+    </div>
+
+    <p>The triggered cost directly answers the question: <strong>"Why is my graph slow when I drag X?"</strong> The higher the number, the more work happens per frame.</p>
+  </section>
+
+  <!-- Level 3: Performance Score -->
+  <section>
+    <h2><span class="section-icon">&#128202;</span> Level 3: Performance Score (0&ndash;100)</h2>
+    <p>The overall performance score provides a single at-a-glance number for the graph's health. It starts at <strong>100</strong> and subtracts weighted penalties based on graph-level metrics. The result is clamped to the range 0&ndash;100.</p>
+
+    <div class="formula">
+      <span class="kw">score</span> <span class="op">=</span> <span class="num">100</span><br>
+      &nbsp;&nbsp;<span class="op">&minus;</span> recursiveDefinitions <span class="op">&times;</span> <span class="num">18</span> &nbsp;&nbsp;<span class="comment">// heaviest penalty</span><br>
+      &nbsp;&nbsp;<span class="op">&minus;</span> largeDataLists <span class="op">&times;</span> <span class="num">12</span><br>
+      &nbsp;&nbsp;<span class="op">&minus;</span> max(0, draggables &minus; 1) <span class="op">&times;</span> <span class="num">5</span> &nbsp;&nbsp;<span class="comment">// first is free</span><br>
+      &nbsp;&nbsp;<span class="op">&minus;</span> max(0, images &minus; 3) <span class="op">&times;</span> <span class="num">2.5</span> &nbsp;&nbsp;<span class="comment">// first 3 are free</span><br>
+      &nbsp;&nbsp;<span class="op">&minus;</span> listComprehensions <span class="op">&times;</span> <span class="num">3.5</span><br>
+      &nbsp;&nbsp;<span class="op">&minus;</span> summations <span class="op">&times;</span> <span class="num">3</span><br>
+      &nbsp;&nbsp;<span class="op">&minus;</span> max(0, expressions &minus; 50) <span class="op">&times;</span> <span class="num">0.15</span> &nbsp;&nbsp;<span class="comment">// gentle scaling</span><br>
+      &nbsp;&nbsp;<span class="op">&minus;</span> max(0, hiddenComputing &minus; 10) <span class="op">&times;</span> <span class="num">0.4</span><br>
+      &nbsp;&nbsp;<span class="op">&minus;</span> polygonOps <span class="op">&times;</span> <span class="num">1.5</span><br>
+      &nbsp;&nbsp;<span class="op">&minus;</span> avgLatexLength <span class="op">&times;</span> <span class="num">0.015</span>
+    </div>
+
+    <table class="metric-table">
+      <thead>
+        <tr><th>Factor</th><th>Penalty</th><th>Free Allowance</th><th>Rationale</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Recursive definitions</td>
+          <td class="val red">&minus;18 each</td>
+          <td>None</td>
+          <td class="rationale">A single recursion can dominate frame time. Two can make a graph unusable.</td>
+        </tr>
+        <tr>
+          <td>Large data lists</td>
+          <td class="val orange">&minus;12 each</td>
+          <td>None</td>
+          <td class="rationale">Hardcoded data over 2000 chars consumes memory and slows the expression parser.</td>
+        </tr>
+        <tr>
+          <td>Draggable elements</td>
+          <td class="val orange">&minus;5 each</td>
+          <td>First 1 free</td>
+          <td class="rationale">Each additional draggable point multiplies the number of dependency chains that fire per frame.</td>
+        </tr>
+        <tr>
+          <td>Images</td>
+          <td class="val yellow">&minus;2.5 each</td>
+          <td>First 3 free</td>
+          <td class="rationale">Images require GPU rendering and position computation. A few are fine; many add up.</td>
+        </tr>
+        <tr>
+          <td>List comprehensions</td>
+          <td class="val yellow">&minus;3.5 each</td>
+          <td>None</td>
+          <td class="rationale">Each generates a list via iteration, scaling with list size.</td>
+        </tr>
+        <tr>
+          <td>Summations</td>
+          <td class="val yellow">&minus;3 each</td>
+          <td>None</td>
+          <td class="rationale">Full-list iteration per evaluation.</td>
+        </tr>
+        <tr>
+          <td>Total expressions</td>
+          <td class="val accent">&minus;0.15 each</td>
+          <td>First 50 free</td>
+          <td class="rationale">Gentle penalty for large graphs. 100 extra expressions costs only &minus;15.</td>
+        </tr>
+        <tr>
+          <td>Hidden computing expressions</td>
+          <td class="val accent">&minus;0.4 each</td>
+          <td>First 10 free</td>
+          <td class="rationale">Hidden folders still evaluate. Many hidden expressions waste processing silently.</td>
+        </tr>
+        <tr>
+          <td>Polygon operations</td>
+          <td class="val teal">&minus;1.5 each</td>
+          <td>None</td>
+          <td class="rationale">Vertex processing and rendering cost, especially with many vertices.</td>
+        </tr>
+        <tr>
+          <td>Average LaTeX length</td>
+          <td class="val muted">&minus;0.015 per char</td>
+          <td>None</td>
+          <td class="rationale">A proxy for overall expression complexity across the graph.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>The resulting score maps to a label and color:</p>
+    <div style="margin: 0.75rem 0;">
+      <div class="cost-bar-demo"><span class="cost-demo-label"><span class="flow-box green" style="font-size:0.72rem">75&ndash;100: Good</span></span><div class="cost-track" style="max-width:300px"><div class="cost-fill" style="width:90%;background:var(--green)"></div></div></div>
+      <div class="cost-bar-demo"><span class="cost-demo-label"><span class="flow-box" style="font-size:0.72rem;background:var(--yellow-glow);border-color:var(--yellow);color:var(--yellow)">50&ndash;74: Fair</span></span><div class="cost-track" style="max-width:300px"><div class="cost-fill" style="width:62%;background:var(--yellow)"></div></div></div>
+      <div class="cost-bar-demo"><span class="cost-demo-label"><span class="flow-box orange" style="font-size:0.72rem;background:var(--orange-glow);border-color:var(--orange);color:var(--orange)">25&ndash;49: Poor</span></span><div class="cost-track" style="max-width:300px"><div class="cost-fill" style="width:37%;background:var(--orange)"></div></div></div>
+      <div class="cost-bar-demo"><span class="cost-demo-label"><span class="flow-box red" style="font-size:0.72rem">0&ndash;24: Critical</span></span><div class="cost-track" style="max-width:300px"><div class="cost-fill" style="width:12%;background:var(--red)"></div></div></div>
+    </div>
+
+    <div class="example-card">
+      <h4>Example: The ocean current duck graph</h4>
+      <div class="calc">
+        <span class="highlight">100</span>
+        &minus; 2 recursive defs &times; 18 = <span style="color:var(--red)">&minus;36</span><br>
+        &minus; 1 large data list &times; 12 = <span style="color:var(--orange)">&minus;12</span><br>
+        &minus; max(0, 2&minus;1) draggables &times; 5 = <span style="color:var(--orange)">&minus;5</span><br>
+        &minus; max(0, 7&minus;3) images &times; 2.5 = <span style="color:var(--yellow)">&minus;10</span><br>
+        &minus; 3 list comprehensions &times; 3.5 = <span style="color:var(--yellow)">&minus;10.5</span><br>
+        &minus; 2 summations &times; 3 = <span style="color:var(--yellow)">&minus;6</span><br>
+        &minus; max(0, 120&minus;50) &times; 0.15 = <span style="color:var(--accent)">&minus;10.5</span><br>
+        &minus; max(0, 40&minus;10) &times; 0.4 = <span style="color:var(--accent)">&minus;12</span><br>
+        &minus; 8 polygon ops &times; 1.5 = <span style="color:var(--teal)">&minus;12</span><br>
+        &minus; avg 90 chars &times; 0.015 = <span style="color:var(--text-muted)">&minus;1.35</span>
+      </div>
+      <div class="result" style="color: var(--red);">Score: ~0 (Critical)</div>
+    </div>
+  </section>
+
+  <!-- How Costs Are Used -->
+  <section>
+    <h2><span class="section-icon">&#128161;</span> How These Costs Drive the Report</h2>
+    <p>The three levels of cost estimation feed into every section of the generated report:</p>
+
+    <table class="metric-table">
+      <thead>
+        <tr><th>Report Section</th><th>Uses</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Severity Banner</strong></td>
+          <td class="rationale">Performance score determines the banner color and label (critical / warning / good).</td>
+        </tr>
+        <tr>
+          <td><strong>Summary Stat Cards</strong></td>
+          <td class="rationale">The highest triggered-cost input is featured. Key metric counts are auto-selected.</td>
+        </tr>
+        <tr>
+          <td><strong>Root Cause Callouts</strong></td>
+          <td class="rationale">Generated from the highest per-expression costs. Recursive definitions and large lists always surface.</td>
+        </tr>
+        <tr>
+          <td><strong>Dependency Flow Diagram</strong></td>
+          <td class="rationale">The primary input (highest triggered cost) is shown. Nodes are colored by per-expression cost: <span class="flow-box red" style="font-size:0.65rem">heavy (&gt;20)</span> <span class="flow-box orange" style="font-size:0.65rem;background:var(--orange-glow);border-color:var(--orange);color:var(--orange)">compute (&gt;8)</span> <span class="flow-box green" style="font-size:0.65rem">output</span></td>
+        </tr>
+        <tr>
+          <td><strong>Expressions by Impact</strong></td>
+          <td class="rationale">Grouped by per-expression cost thresholds: Critical (&gt;20 or recursive), High (&gt;6), Medium (&gt;2.5), Low (rest).</td>
+        </tr>
+        <tr>
+          <td><strong>Function Cost Analysis</strong></td>
+          <td class="rationale">Functions sorted by per-expression cost. Progress bars show relative cost within the group.</td>
+        </tr>
+        <tr>
+          <td><strong>Real-Time Groups</strong></td>
+          <td class="rationale">Each input's triggered cost determines its severity badge (critical / high / medium / low).</td>
+        </tr>
+        <tr>
+          <td><strong>Cost Breakdown</strong></td>
+          <td class="rationale">Per-expression costs summed by category. Percentages show where total cost is concentrated.</td>
+        </tr>
+        <tr>
+          <td><strong>Recommendations</strong></td>
+          <td class="rationale">Triggered by specific metric thresholds (e.g., recursive count &gt; 0, triggered count &gt; 15, hidden folders &gt; 0).</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="callout orange">
+    <strong>Limitations</strong>
+    The analyzer detects patterns in the LaTeX source text using regex matching. It does not execute the expressions or measure actual runtime. Costs do not account for Desmos's internal optimizations (caching, lazy evaluation) or hardware differences. Use the scores as a guide for where to investigate, not as absolute measurements.
+  </div>
+
+  <footer>
+    <a href="analyze.html">Back to Graph Analyzer</a> &nbsp;&middot;&nbsp;
+    <a href="compare.html">Graph Comparator</a> &nbsp;&middot;&nbsp;
+    Cost Analysis Methodology
+  </footer>
+</div>
+</body>
+</html>
