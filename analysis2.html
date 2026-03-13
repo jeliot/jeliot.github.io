@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Desmos Graph Analyzer</title>
+  <title>Desmos Graph Analyzer v2</title>
   <style>
     :root {
       --bg: #0f1117;
@@ -142,8 +142,8 @@
 <div class="container">
   <a href="index.html" style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.82rem;color:var(--text-muted);text-decoration:none;margin-bottom:0.5rem;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">&larr; Home</a>
   <header>
-    <h1>Desmos Graph Analyzer</h1>
-    <p class="subtitle">Paste a Desmos graph link to generate a full performance diagnosis report</p>
+    <h1>Desmos Graph Analyzer <span style="font-size:0.6em;color:var(--accent);vertical-align:super">v2</span></h1>
+    <p class="subtitle">Enhanced performance analysis with integral, repeat, and movable point detection</p>
     <p class="meta-link"><a href="cost-analysis.html">How is cost calculated? &rarr;</a></p>
   </header>
 
@@ -208,42 +208,91 @@ function varTokens(l){
   const v=new Set();
   let m; const re=/([a-zA-Z])_\{([^}]+)\}/g;
   while((m=re.exec(l))!==null){if(!BUILTINS.has(m[2]))v.add(m[1]+'_{'+m[2]+'}')}
-  const cl=l.replace(/\\operatorname\{[^}]+\}/g,' ').replace(/\\[a-zA-Z]+/g,' ').replace(/[a-zA-Z]_\{[^}]+\}/g,' ').replace(/[0-9.]+/g,' ');
+  const ptRe=/([A-Z](?:_\{[^}]+\})?)\.[xy]/g;
+  let pm;while((pm=ptRe.exec(l))!==null)v.add(pm[1]);
+  const cl=l.replace(/\\operatorname\{[^}]+\}/g,' ').replace(/\\[a-zA-Z]+/g,' ').replace(/[a-zA-Z]_\{[^}]+\}/g,' ').replace(/[A-Z]\.[xy]/g,' ').replace(/[0-9.]+/g,' ');
   for(const ch of cl){if(/[a-df-wyz]/i.test(ch))v.add(ch)}
   return v;
+}
+
+function findFnCalls(latex){
+  const calls=[];
+  const re=/([a-zA-Z](?:_\{[^}]+\})?)\\left\(/g;
+  let m;
+  while((m=re.exec(latex))!==null){
+    const fnName=m[1];
+    if(BUILTINS.has(fnName)||BUILTINS.has(fnName.replace(/.*_\{|\}/g,'')))continue;
+    let depth=1,i=m.index+m[0].length,argStart=i,args=[];
+    while(i<latex.length&&depth>0){
+      if(latex.startsWith('\\left(',i)){depth++;i+=6;continue}
+      if(latex.startsWith('\\left[',i)){depth++;i+=6;continue}
+      if(latex.startsWith('\\left\\{',i)){depth++;i+=7;continue}
+      if(latex.startsWith('\\right)',i)){depth--;if(depth===0){args.push(latex.slice(argStart,i));i+=7;break}i+=7;continue}
+      if(latex.startsWith('\\right]',i)||latex.startsWith('\\right\\}',i)){depth--;i+=7;continue}
+      if(latex[i]===','&&depth===1){args.push(latex.slice(argStart,i));argStart=i+1}
+      i++;
+    }
+    const argVars=args.map(a=>[...varTokens(a)]);
+    calls.push({fn:fnName,args,argVars});
+  }
+  return calls;
 }
 
 function parseExpr(latex){
   if(!latex)return null;
   const isAct=/[^<>!]\\to(?![a-z])/.test(latex)||latex.startsWith('\\to')||/^[a-zA-Z](?:_\{[^}]+\})?\\to/.test(latex);
-  if(isAct)return{type:'action',name:null,refs:varTokens(latex),latex};
+  if(isAct)return{type:'action',name:null,refs:varTokens(latex),latex,calls:findFnCalls(latex)};
   const eq=findDefEq(latex);
-  if(eq===-1)return{type:'display',name:null,refs:varTokens(latex),latex};
+  if(eq===-1)return{type:'display',name:null,refs:varTokens(latex),latex,calls:findFnCalls(latex)};
   const lhs=latex.slice(0,eq),rhs=latex.slice(eq+1);
   let name=null,params=[],isFunc=false,isRec=false;
   const fm=lhs.match(/^([a-zA-Z](?:_\{[^}]+\})?)\\left\(/);
   if(fm){name=fm[1];isFunc=true;const pi=lhs.slice(fm[0].length).replace(/\\right\)$/,'');params=[...varTokens(pi)];if(rhs.includes(name+'\\left(')||rhs.includes(name+'('))isRec=true}
   else{const vm=lhs.match(/^([a-zA-Z](?:_\{[^}]+\})?)/);if(vm)name=vm[1]}
   const refs=varTokens(rhs);params.forEach(p=>refs.delete(p));if(name)refs.delete(name);
-  return{type:isFunc?'function':'variable',name,refs,isFunc,isRec,params,latex};
+  const calls=findFnCalls(rhs);
+  return{type:isFunc?'function':'variable',name,refs,isFunc,isRec,params,latex,calls};
 }
 
 /* ═══════ DEPENDENCY GRAPH ═══════ */
 function buildDeps(parsedList){
   const def={},on={},by={},all=new Set();
+  const callsTo={},calledBy={};
   for(const p of parsedList){if(!p?.name)continue;def[p.name]=p;all.add(p.name)}
-  for(const p of parsedList){if(!p?.name)continue;const d=new Set();for(const r of p.refs)if(def[r]&&r!==p.name)d.add(r);on[p.name]=d;for(const dep of d){if(!by[dep])by[dep]=new Set();by[dep].add(p.name)}}
+  for(const p of parsedList){
+    if(!p?.name)continue;
+    const d=new Set();
+    for(const r of p.refs)if(def[r]&&r!==p.name)d.add(r);
+    on[p.name]=d;
+    for(const dep of d){if(!by[dep])by[dep]=new Set();by[dep].add(p.name)}
+    if(p.calls){
+      for(const c of p.calls){
+        if(def[c.fn]){
+          if(!callsTo[p.name])callsTo[p.name]=[];
+          callsTo[p.name].push({fn:c.fn,argVars:c.argVars});
+          if(!calledBy[c.fn])calledBy[c.fn]=[];
+          calledBy[c.fn].push({caller:p.name,argVars:c.argVars});
+        }
+      }
+    }
+  }
   for(const n of all){if(!on[n])on[n]=new Set();if(!by[n])by[n]=new Set()}
   function trans(n,v=new Set()){if(v.has(n))return v;v.add(n);for(const c of(by[n]||[]))trans(c,v);return v}
-  return{def,on,by,all,trans};
+  return{def,on,by,all,trans,callsTo,calledBy};
 }
 
-/* ═══════ COST ESTIMATION ═══════ */
+/* ═══════ COST ESTIMATION (v2) ═══════ */
 function eCost(p){
   if(!p)return 1;const l=p.latex||'';
   if(l.length>2000)return 1;
   let c=1;c+=l.length*0.003;
-  if(p.isRec)c+=30;if(/\\operatorname\{for\}/.test(l))c+=8;if(/\\sum|\\operatorname\{total\}/.test(l))c+=6;
+  if(p.isRec)c+=30;
+  const hasSum=/\\sum|\\operatorname\{total\}/.test(l);
+  const hasInt=/\\int/.test(l);
+  if(hasSum&&hasInt)c+=20;
+  else{if(hasSum)c+=6;if(hasInt)c+=10;}
+  if(/\\operatorname\{for\}/.test(l))c+=8;
+  if(/\\operatorname\{repeat\}/.test(l))c+=6;
   if(/\\operatorname\{polygon\}/.test(l))c+=4;if(/\\operatorname\{with\}/.test(l))c+=2;if(/\\operatorname\{join\}/.test(l))c+=2;
   if(/\\left\\\{/.test(l))c+=1;return c;
 }
@@ -252,7 +301,7 @@ function eCost(p){
 function analyze(state){
   const items=state?.expressions?.list||[];
   const folders={},exprs=[],images=[],texts=[],parsed=[];
-  const m={expr:0,vis:0,fold:0,img:0,txt:0,slider:0,drag:0,act:0,reg:0,rec:0,listC:0,sum:0,poly:0,pw:0,wth:0,jn:0,hidC:0,fn:0,totCh:0,maxCh:0,maxChE:'',lgList:0};
+  const m={expr:0,vis:0,fold:0,img:0,txt:0,slider:0,drag:0,movPt:0,act:0,reg:0,rec:0,listC:0,sum:0,integ:0,sumInt:0,poly:0,pw:0,wth:0,jn:0,rpt:0,hidC:0,fn:0,totCh:0,maxCh:0,maxChE:'',lgList:0,listRange:0,ptAccess:0};
 
   for(const it of items)if(it.type==='folder'){m.fold++;folders[it.id]={title:it.title||'',hidden:!!it.hidden}}
   for(const it of items){
@@ -262,11 +311,18 @@ function analyze(state){
     if(it.type!=='expression'||!it.latex)continue;
     if(it.latex.includes('j_{uice}'))continue;
     m.expr++;const l=it.latex;if(!it.hidden)m.vis++;else m.hidC++;if(it.slider)m.slider++;if(it.dragMode==='XY')m.drag++;
+    const isMovPt=/^[A-Z](?:_\{[^}]+\})?\s*=\s*\\left\(\s*-?[\d.]/.test(l);
+    if(isMovPt)m.movPt++;
     m.totCh+=l.length;if(l.length>m.maxCh){m.maxCh=l.length;m.maxChE=l.slice(0,80)}if(l.length>2000)m.lgList++;
     if(/\\to(?![a-z])/.test(l))m.act++;if(it.residualVariable)m.reg++;
-    if(/\\operatorname\{for\}/.test(l))m.listC++;if(/\\sum|\\operatorname\{total\}/.test(l))m.sum++;
+    const hasSum=/\\sum|\\operatorname\{total\}/.test(l);const hasInt=/\\int/.test(l);
+    if(hasSum)m.sum++;if(hasInt)m.integ++;if(hasSum&&hasInt)m.sumInt++;
+    if(/\\operatorname\{for\}/.test(l))m.listC++;
+    if(/\\operatorname\{repeat\}/.test(l))m.rpt++;
     if(/\\operatorname\{polygon\}/.test(l))m.poly++;if(/\\left\\\{/.test(l))m.pw++;
     if(/\\operatorname\{with\}/.test(l))m.wth++;if(/\\operatorname\{join\}/.test(l))m.jn++;
+    if(/[A-Z]\.[xy]/.test(l))m.ptAccess++;
+    if(/\.\.\.\s*[\d-]/.test(l)&&/^y\s*=/.test(l))m.listRange++;
     const p=parseExpr(l);if(p?.isFunc)m.fn++;if(p?.isRec)m.rec++;
     parsed.push(p);
     exprs.push({id:it.id,latex:l,fid:it.folderId,hidden:!!it.hidden,slider:!!it.slider,drag:it.dragMode,p});
@@ -277,7 +333,8 @@ function analyze(state){
   const inputs=[];
   for(const n of dep.all){if(dep.on[n].size===0){
     const e=exprs.find(x=>x.p?.name===n);
-    const type=e?.slider?'slider':e?.drag==='XY'?'draggable':e?.p?.isFunc?'function':'constant';
+    const isMovPt=e&&/^[A-Z](?:_\{[^}]+\})?\s*=\s*\\left\(\s*-?[\d.]/.test(e.latex);
+    const type=e?.slider?'slider':e?.drag==='XY'?'draggable':isMovPt?'movable point':e?.p?.isFunc?'function':'constant';
     const aff=dep.trans(n);aff.delete(n);
     let cost=0;for(const a of aff)cost+=eCost(dep.def[a]);
     inputs.push({name:n,type,count:aff.size,cost,affected:aff});
@@ -291,7 +348,8 @@ function analyze(state){
 function genReport(a, graphUrl){
   const{m,folders,exprs,images,texts,dep,inputs}=a;
   let html='';
-  const score=Math.max(0,Math.min(100,Math.round(100-m.rec*18-Math.max(0,m.drag-1)*5-Math.max(0,m.img-3)*2.5-m.listC*3.5-m.sum*3-Math.max(0,m.expr-50)*0.15-Math.max(0,m.hidC-10)*0.4-m.poly*1.5-m.avgCh*0.015)));
+  const exprPenalty=m.expr>500?Math.max(0,m.expr-50)*0.3:Math.max(0,m.expr-50)*0.15;
+  const score=Math.max(0,Math.min(100,Math.round(100-m.rec*18-m.sumInt*15-m.integ*8-Math.max(0,m.drag+m.movPt-1)*5-Math.max(0,m.img-3)*2.5-m.listC*3.5-m.sum*3-m.rpt*4-m.listRange*5-exprPenalty-Math.max(0,m.hidC-10)*0.4-m.poly*1.5-m.avgCh*0.015)));
   const primary=inputs[0];
   const recExprs=exprs.filter(e=>e.p?.isRec);
   const fnames=Object.values(folders).map(f=>f.title.toLowerCase());
@@ -318,10 +376,14 @@ function genReport(a, graphUrl){
   /* ── Summary Stats ── */
   const stats=[];
   if(m.rec>0) stats.push({v:m.rec,l:'Recursive Definition'+(m.rec>1?'s':''),c:'red'});
+  if(m.sumInt>0) stats.push({v:m.sumInt,l:'Nested Sum+Integral',c:'red'});
+  if(m.integ>0&&stats.length<4) stats.push({v:m.integ,l:'Integral'+(m.integ>1?'s':''),c:'orange'});
   if(primary&&primary.count>3) stats.push({v:primary.count,l:'Exprs Depend on '+primary.name,c:'orange'});
   stats.push({v:m.expr,l:'Total Expressions',c:'accent'});
-  if(m.img>0) stats.push({v:m.img,l:'Image'+(m.img>1?'s':''),c:'teal'});
-  if(m.drag>0&&stats.length<4) stats.push({v:m.drag,l:'Draggable Element'+(m.drag>1?'s':''),c:'accent'});
+  if(m.img>0&&stats.length<4) stats.push({v:m.img,l:'Image'+(m.img>1?'s':''),c:'teal'});
+  if((m.drag+m.movPt)>0&&stats.length<4) stats.push({v:m.drag+m.movPt,l:'Draggable/Movable Points',c:'accent'});
+  if(m.rpt>0&&stats.length<4) stats.push({v:m.rpt,l:'Repeat Operations',c:'orange'});
+  if(m.listRange>0&&stats.length<4) stats.push({v:m.listRange,l:'Implicit Curve Families',c:'orange'});
   if(m.poly>0&&stats.length<4) stats.push({v:m.poly,l:'Polygon Operations',c:'teal'});
   if(m.fn>0&&stats.length<4) stats.push({v:m.fn,l:'Custom Functions',c:'accent'});
   while(stats.length<4) stats.push({v:m.slider,l:'Sliders',c:'teal'});
@@ -332,8 +394,11 @@ function genReport(a, graphUrl){
   // Graph description
   let desc=`This graph contains <strong>${m.expr} expressions</strong> across <strong>${m.fold} folders</strong>`;
   if(m.img>0) desc+=`, uses <strong>${m.img} images</strong>`;
-  if(m.drag>0) desc+=`, and has <strong>${m.drag} draggable element(s)</strong>`;
+  if(m.drag+m.movPt>0) desc+=`, and has <strong>${m.drag+m.movPt} draggable/movable point(s)</strong>`;
   desc+='.';
+  if(m.integ>0) desc+=` Uses <strong>${m.integ} integral(s)</strong>${m.sumInt>0?' ('+m.sumInt+' nested inside summations)':''}.`;
+  if(m.rpt>0) desc+=` Contains <strong>${m.rpt} repeat operation(s)</strong> that multiply rendering load.`;
+  if(m.listRange>0) desc+=` Has <strong>${m.listRange} implicit equation(s) with list ranges</strong>, creating multiple curves from a single expression.`;
   const topics=[];
   if(fnames.some(f=>/animat|timing|ticker/.test(f)))topics.push('animation');
   if(fnames.some(f=>/continent|ocean|geo|map|globe/.test(f)))topics.push('geography/map');
@@ -356,9 +421,28 @@ function genReport(a, graphUrl){
     if(primary&&primary.count>5) txt+=` When ${ei(primary.name)} changes, <strong>the entire chain recomputes from scratch</strong>.`;
     html+=`<div class="callout red"><strong>Primary Bottleneck: Recursive Computation</strong>${txt}</div>`;
   }
+  if(m.sumInt>0){
+    const siExprs=exprs.filter(e=>/\\sum|\\operatorname\{total\}/.test(e.latex)&&/\\int/.test(e.latex));
+    const siNames=siExprs.map(e=>e.p?.name).filter(Boolean);
+    html+=`<div class="callout red"><strong>Nested Summation + Integral</strong>${siNames.length>0?'The expression(s) '+siNames.map(n=>ei(n)).join(', ')+' contain':'Detected'} a summation with a nested definite integral. Each term in the sum requires numerical integration, making the cost multiplicative. This is one of the most expensive patterns possible in Desmos.</div>`;
+  } else if(m.integ>0){
+    html+=`<div class="callout orange"><strong>Definite Integral${m.integ>1?'s':''} Detected</strong>${m.integ} expression(s) use definite integrals, which require numerical approximation and are significantly more expensive than algebraic operations.</div>`;
+  }
+  if(m.rpt>0){
+    html+=`<div class="callout orange"><strong>Repeat Operations: Rendering Multiplier</strong>${m.rpt} expression(s) use <code>repeat()</code> to duplicate curves or points. Each repetition requires independent GPU rendering, stress-testing the rendering pipeline.</div>`;
+  }
+  if(m.listRange>0){
+    html+=`<div class="callout orange"><strong>Implicit Curve Multiplication</strong>${m.listRange} implicit equation(s) use list ranges (e.g., <code>y = [-8,-7.8...8] + cos(x)</code>), generating many separate curves from a single expression. Desmos must solve each curve independently, multiplying the rendering and root-finding cost.</div>`;
+  }
+  if(m.expr>500){
+    html+=`<div class="callout orange"><strong>High Expression Count: ${m.expr}</strong>This graph has an unusually large number of expressions. Even trivial expressions (like <code>1·1</code>) add overhead to Desmos's expression management system. Consider removing unused or redundant expressions.</div>`;
+  }
   if(m.img>5){
     const inames=images.map(i=>i.name||i.description||'').filter(Boolean);
     html+=`<div class="callout accent"><strong>Rendering Load: ${m.img} Image Instances</strong>${m.img} images are rendered simultaneously${inames.length>0?' (including '+inames.slice(0,3).map(n=>'<strong>'+H(T(n,25))+'</strong>').join(', ')+')':''}. Each requires position computation and GPU rendering per frame.</div>`;
+  }
+  if(m.ptAccess>0&&m.movPt>0){
+    html+=`<div class="callout accent"><strong>Movable Point Dependencies</strong>${m.ptAccess} expression(s) reference movable point coordinates (e.g., <code>A.x</code>, <code>A.y</code>). These recalculate every time the point is dragged, creating real-time computation chains.</div>`;
   }
   const hidFolders=Object.entries(folders).filter(([id,f])=>f.hidden&&exprs.some(e=>e.fid===id));
   if(hidFolders.length>0){
@@ -372,7 +456,8 @@ function genReport(a, graphUrl){
   /* ── Dependency Flow ── */
   if(primary&&primary.count>3){
     html+=`<section><h2><span class="section-icon">&#128200;</span> Dependency Flow for ${ei(primary.name)}</h2>`;
-    html+=`<p class="desc">When ${ei(primary.name)} changes${primary.type==='draggable'?' (drag)':primary.type==='slider'?' (slider)':''}, this is the cascade of recalculation:</p>`;
+    const ptLabel=primary.type==='draggable'?' (drag)':primary.type==='movable point'?' (movable point)':primary.type==='slider'?' (slider)':'';
+    html+=`<p class="desc">When ${ei(primary.name)} changes${ptLabel}, this is the cascade of recalculation:</p>`;
     html+=`<div class="legend">
       <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Input</div>
       <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div> Compute</div>
@@ -387,7 +472,7 @@ function genReport(a, graphUrl){
     // Row 1: primary input -> direct dependents
     const topNodes=directKids.slice(0,5);
     if(topNodes.length>0){
-      html+=`<div class="flow-row"><div class="flow-box input">${H(primary.name)}${primary.type==='draggable'?' (drag)':primary.type==='slider'?' (slider)':''}</div>`;
+      html+=`<div class="flow-row"><div class="flow-box input">${H(primary.name)}${ptLabel}</div>`;
       for(const n of topNodes){
         const p=dep.def[n];const cls=p?.isRec?'heavy':eCost(p)>8?'compute':'output';
         html+=`<span class="flow-arrow">&rarr;</span><div class="flow-box ${cls}">${H(T(n,25))}</div>`;
@@ -427,6 +512,105 @@ function genReport(a, graphUrl){
       html+=`<hr style="border:none;border-top:1px solid var(--border);margin:0.75rem 0"><div class="flow-row"><div class="flow-box output">Derived data</div><span class="flow-arrow">&rarr;</span><div class="flow-box display">${imgCount} image(s)</div><span class="flow-arrow">&rarr;</span><div class="flow-box display">${m.vis} visible expression(s)</div></div>`;
     }
     html+=`</div></section>`;
+  }
+
+  /* ── Full Dependency Graph ── */
+  {
+    const named=exprs.filter(e=>e.p?.name);
+    if(named.length>0){
+      html+=`<section><h2><span class="section-icon">&#128279;</span> Functional Dependency Graph</h2>`;
+      html+=`<p class="desc">Every named variable and function, showing what it depends on, what depends on it, and function call details.</p>`;
+
+      const funcDefs=named.filter(e=>e.p.isFunc).sort((a,b)=>eCost(b.p)-eCost(a.p));
+      const varDefs=named.filter(e=>!e.p.isFunc).sort((a,b)=>eCost(b.p)-eCost(a.p));
+
+      if(funcDefs.length>0){
+        html+=`<div class="card open" id="card-dep-fns"><div class="card-header" onclick="toggleCard('card-dep-fns')"><h3>Functions (${funcDefs.length})</h3>${chevSvg}</div><div class="card-body">`;
+        for(const e of funcDefs){
+          const n=e.p.name;const c=eCost(e.p);
+          const cc=c>20?'var(--red)':c>8?'var(--orange)':c>3?'var(--yellow)':'var(--text-muted)';
+          const upstream=[...e.p.refs].filter(r=>dep.def[r]);
+          const downstream=[...(dep.by[n]||[])];
+          const callers=dep.calledBy[n]||[];
+          html+=`<div style="background:var(--surface-hover);border-radius:8px;padding:1rem;margin-bottom:0.75rem">`;
+          html+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">`;
+          html+=`<span style="font-size:0.95rem;font-weight:600">${ei(n)}(${e.p.params.join(', ')})`;
+          if(e.p.isRec) html+=` <span class="badge critical" style="font-size:0.6rem;margin-left:0.3rem">recursive</span>`;
+          html+=`</span><span style="font-family:var(--mono);font-size:0.82rem;color:${cc}">${c.toFixed(1)}</span></div>`;
+          html+=`<div style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);margin-bottom:0.6rem;word-break:break-all">${H(T(e.latex,150))}</div>`;
+          html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.8rem">`;
+          html+=`<div><strong style="color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em">Depends on</strong><div style="margin-top:0.25rem">${upstream.length>0?upstream.map(r=>{const d=dep.def[r];return`<span class="flow-box ${d?.isFunc?'compute':'input'}" style="font-size:0.7rem;margin:0.1rem">${H(r)}${d?.isFunc?'()':''}</span>`}).join(''):'<span style="color:var(--text-muted);font-style:italic">none (root)</span>'}</div></div>`;
+          html+=`<div><strong style="color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em">Depended on by</strong><div style="margin-top:0.25rem">${downstream.length>0?downstream.slice(0,10).map(r=>{const d=dep.def[r];return`<span class="flow-box ${d?.isFunc?'compute':'output'}" style="font-size:0.7rem;margin:0.1rem">${H(T(r,20))}${d?.isFunc?'()':''}</span>`}).join('')+(downstream.length>10?`<span style="color:var(--text-muted);font-size:0.7rem"> +${downstream.length-10} more</span>`:''):'<span style="color:var(--text-muted);font-style:italic">none (leaf)</span>'}</div></div>`;
+          html+=`</div>`;
+          if(callers.length>0){
+            html+=`<div style="margin-top:0.5rem"><strong style="color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em">Called by</strong>`;
+            html+=`<table style="width:100%;border-collapse:collapse;margin-top:0.25rem;font-size:0.78rem">`;
+            html+=`<thead><tr><th style="text-align:left;padding:0.3rem 0.5rem;border-bottom:1px solid var(--border);color:var(--text-muted);font-weight:600;font-size:0.68rem;text-transform:uppercase">Caller</th><th style="text-align:left;padding:0.3rem 0.5rem;border-bottom:1px solid var(--border);color:var(--text-muted);font-weight:600;font-size:0.68rem;text-transform:uppercase">Arguments passed</th></tr></thead><tbody>`;
+            for(const cl of callers.slice(0,8)){
+              const argStr=cl.argVars.map((a,i)=>a.length>0?a.join(', '):'literal').join('; ');
+              html+=`<tr><td style="padding:0.3rem 0.5rem;border-bottom:1px solid rgba(42,46,61,0.3)">${ei(cl.caller)}</td><td style="padding:0.3rem 0.5rem;border-bottom:1px solid rgba(42,46,61,0.3);color:var(--text-muted)">${H(argStr)}</td></tr>`;
+            }
+            if(callers.length>8) html+=`<tr><td colspan="2" style="padding:0.3rem 0.5rem;color:var(--text-muted);font-size:0.75rem">...and ${callers.length-8} more</td></tr>`;
+            html+=`</tbody></table></div>`;
+          }
+          const fnCalls=dep.callsTo[n]||[];
+          if(fnCalls.length>0){
+            html+=`<div style="margin-top:0.5rem"><strong style="color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em">Calls</strong>`;
+            html+=`<div style="margin-top:0.25rem">`;
+            for(const fc of fnCalls){
+              const argStr=fc.argVars.map(a=>a.length>0?a.join(', '):'literal').join(', ');
+              html+=`<span class="flow-box heavy" style="font-size:0.7rem;margin:0.1rem">${H(fc.fn)}(${H(argStr)})</span>`;
+            }
+            html+=`</div></div>`;
+          }
+          html+=`</div>`;
+        }
+        html+=`</div></div>`;
+      }
+
+      if(varDefs.length>0){
+        const displayVars=varDefs.filter(e=>{
+          const n=e.p.name;
+          return(dep.on[n]&&dep.on[n].size>0)||(dep.by[n]&&dep.by[n].size>0)||(dep.callsTo[n]&&dep.callsTo[n].length>0);
+        });
+        if(displayVars.length>0){
+          html+=`<div class="card" id="card-dep-vars"><div class="card-header" onclick="toggleCard('card-dep-vars')"><h3>Variables with dependencies (${displayVars.length})</h3>${chevSvg}</div><div class="card-body">`;
+          html+=`<table class="expr-table"><thead><tr><th>Variable</th><th>Depends on</th><th>Depended on by</th><th>Calls</th><th>Cost</th></tr></thead><tbody>`;
+          for(const e of displayVars.slice(0,60)){
+            const n=e.p.name;const c=eCost(e.p);
+            const cc=c>20?'var(--red)':c>8?'var(--orange)':c>3?'var(--yellow)':'var(--text-muted)';
+            const upstream=[...e.p.refs].filter(r=>dep.def[r]);
+            const downstream=[...(dep.by[n]||[])];
+            const fnCalls=dep.callsTo[n]||[];
+            html+=`<tr>`;
+            html+=`<td><strong>${ei(n)}</strong></td>`;
+            html+=`<td style="font-size:0.78rem">${upstream.length>0?upstream.slice(0,4).map(r=>ei(r)).join(', ')+(upstream.length>4?' <span style="color:var(--text-muted)">+'+( upstream.length-4)+'</span>':''):'<span style="color:var(--text-muted)">—</span>'}</td>`;
+            html+=`<td style="font-size:0.78rem">${downstream.length>0?downstream.slice(0,4).map(r=>ei(r)).join(', ')+(downstream.length>4?' <span style="color:var(--text-muted)">+'+(downstream.length-4)+'</span>':''):'<span style="color:var(--text-muted)">—</span>'}</td>`;
+            html+=`<td style="font-size:0.78rem">${fnCalls.length>0?fnCalls.map(fc=>`${ei(fc.fn)}(${fc.argVars.map(a=>a.length>0?a.join(','):'…').join(',')})`).join(', '):'<span style="color:var(--text-muted)">—</span>'}</td>`;
+            html+=`<td style="font-family:var(--mono);font-size:0.8rem;color:${cc}">${c.toFixed(1)}</td>`;
+            html+=`</tr>`;
+          }
+          if(displayVars.length>60) html+=`<tr><td colspan="5" style="color:var(--text-muted);font-size:0.82rem">...and ${displayVars.length-60} more variables</td></tr>`;
+          html+=`</tbody></table></div></div>`;
+        }
+
+        const isolatedVars=varDefs.filter(e=>{
+          const n=e.p.name;
+          return(!dep.on[n]||dep.on[n].size===0)&&(!dep.by[n]||dep.by[n].size===0)&&(!dep.callsTo[n]||dep.callsTo[n].length===0);
+        });
+        if(isolatedVars.length>0){
+          html+=`<div class="card" id="card-dep-iso"><div class="card-header" onclick="toggleCard('card-dep-iso')"><h3>Isolated variables — no dependencies (${isolatedVars.length})</h3>${chevSvg}</div><div class="card-body">`;
+          html+=`<p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.5rem">These variables neither depend on nor are depended on by other named expressions. They may be constants, display expressions, or unused definitions.</p>`;
+          html+=`<div style="display:flex;flex-wrap:wrap;gap:0.3rem">`;
+          for(const e of isolatedVars.slice(0,100)){
+            html+=`<span class="flow-box display" style="font-size:0.7rem">${H(e.p.name)}</span>`;
+          }
+          if(isolatedVars.length>100) html+=`<span style="color:var(--text-muted);font-size:0.75rem;align-self:center">+${isolatedVars.length-100} more</span>`;
+          html+=`</div></div></div>`;
+        }
+      }
+      html+=`</section>`;
+    }
   }
 
   /* ── Expressions by Impact ── */
@@ -474,17 +658,27 @@ function genReport(a, graphUrl){
       const cc=c>20?'var(--red)':c>8?'var(--orange)':c>3?'var(--yellow)':'var(--green)';
       const tags=[];
       if(e.p.isRec)tags.push('recursive');
+      if(/\\int/.test(e.latex))tags.push('integral');
       if(/\\operatorname\{for\}/.test(e.latex))tags.push('list comp');
       if(/\\sum|\\operatorname\{total\}/.test(e.latex))tags.push('summation');
+      if(/\\operatorname\{repeat\}/.test(e.latex))tags.push('repeat');
       if(/\\operatorname\{polygon\}/.test(e.latex))tags.push('polygon');
       if(/\\operatorname\{with\}/.test(e.latex))tags.push('with');
+      const callers=dep.calledBy[e.p.name]||[];
+      const callsMade=dep.callsTo[e.p.name]||[];
+      const depVars=[...e.p.refs].filter(r=>dep.def[r]&&!dep.def[r].isFunc);
       html+=`<div style="margin-bottom:1rem">
         <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:0.25rem">
-          <span>${ei(e.p.name||'?')}${e.p.params.length>0?' ('+e.p.params.join(', ')+')':''} ${tags.map(t=>'<span class="badge '+(t==='recursive'?'critical':'info')+'" style="font-size:0.6rem;margin-left:0.3rem">'+t+'</span>').join('')}</span>
+          <span>${ei(e.p.name||'?')}(${e.p.params.join(', ')}) ${tags.map(t=>'<span class="badge '+(t==='recursive'?'critical':'info')+'" style="font-size:0.6rem;margin-left:0.3rem">'+t+'</span>').join('')}</span>
           <span style="font-family:var(--mono);font-size:0.8rem;color:${cc}">${c.toFixed(1)}</span>
         </div>
         <div class="cost-bar"><div class="cost-track"><div class="cost-fill" style="width:${pct}%;background:${cc}"></div></div><span class="cost-label">${pct}%</span></div>
-        <p style="font-size:0.8rem;color:var(--text-muted)">${H(T(e.latex,120))}</p>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.3rem">${H(T(e.latex,120))}</p>
+        <div style="font-size:0.75rem;color:var(--text-muted);display:flex;gap:1rem;flex-wrap:wrap">
+          ${depVars.length>0?'<span>Reads: '+depVars.slice(0,5).map(r=>ei(r)).join(', ')+(depVars.length>5?' +'+( depVars.length-5):'')+'</span>':''}
+          ${callsMade.length>0?'<span>Calls: '+callsMade.map(fc=>ei(fc.fn+'()')).join(', ')+'</span>':''}
+          ${callers.length>0?'<span>Called by: '+callers.slice(0,4).map(cl=>ei(cl.caller)).join(', ')+(callers.length>4?' +'+(callers.length-4):'')+'</span>':''}
+        </div>
       </div>`;
     }
     html+=`</div></div></section>`;
@@ -497,7 +691,7 @@ function genReport(a, graphUrl){
   const triggerGroups=[];
   for(const inp of inputs.slice(0,6)){
     if(inp.count<2)continue;
-    const label=inp.type==='draggable'?`Drag: ${inp.name}`:inp.type==='slider'?`Slider: ${inp.name}`:`Input: ${inp.name}`;
+    const label=inp.type==='draggable'?`Drag: ${inp.name}`:inp.type==='movable point'?`Move: ${inp.name}`:inp.type==='slider'?`Slider: ${inp.name}`:`Input: ${inp.name}`;
     triggerGroups.push({label,name:inp.name,count:inp.count,cost:inp.cost,affected:inp.affected});
   }
   // Static group
@@ -531,8 +725,10 @@ function genReport(a, graphUrl){
   let totalCost=0;for(const e of exprs)totalCost+=eCost(e.p);
   const cats=[
     {l:'Recursive Definitions',t:e=>e.p?.isRec,c:'var(--red)'},
+    {l:'Integrals (incl. nested in sums)',t:(e)=>/\\int/.test(e.latex),c:'var(--red)'},
     {l:'List Comprehensions',t:(e)=>/\\operatorname\{for\}/.test(e.latex),c:'var(--orange)'},
     {l:'Summations / Totals',t:(e)=>/\\sum|\\operatorname\{total\}/.test(e.latex),c:'var(--yellow)'},
+    {l:'Repeat Operations',t:(e)=>/\\operatorname\{repeat\}/.test(e.latex),c:'var(--orange)'},
     {l:'Polygon Operations',t:(e)=>/\\operatorname\{polygon\}/.test(e.latex),c:'var(--teal)'},
     {l:'All Other Expressions',t:()=>true,c:'var(--text-muted)'},
   ];
@@ -552,6 +748,20 @@ function genReport(a, graphUrl){
   if(m.rec>0){
     const names=recExprs.map(e=>e.p.name).filter(Boolean);
     html+=rec(rn++,'Reduce or defer recursive computation',`The recursive definition(s) ${names.map(n=>ei(n)).join(', ')} recompute their entire chain every time an upstream input changes. Consider reducing the recursion depth, or use a Computation Layer action to compute the chain only on drag-end rather than every frame.`);
+  }
+  if(m.sumInt>0){
+    html+=rec(rn++,'Avoid nesting integrals inside summations',`${m.sumInt} expression(s) contain a summation wrapping a definite integral. Each term requires numerical integration, making the cost multiplicative. Consider precomputing the integral symbolically or reducing the summation range.`);
+  } else if(m.integ>0){
+    html+=rec(rn++,'Minimize definite integral usage',`${m.integ} expression(s) use definite integrals. Numerical integration is expensive per frame. If possible, compute antiderivatives symbolically, or use a CL action to evaluate only when inputs change.`);
+  }
+  if(m.rpt>0){
+    html+=rec(rn++,'Reduce repeat count',`${m.rpt} expression(s) use repeat() to duplicate rendering. Each repetition is independently rendered by the GPU. Reduce the repeat count to the minimum needed for the visual effect.`);
+  }
+  if(m.listRange>0){
+    html+=rec(rn++,'Consolidate implicit curve families',`${m.listRange} implicit equation(s) generate multiple curves via list ranges. Each curve requires independent root-finding. Consider plotting fewer representative curves or switching to a parametric approach.`);
+  }
+  if(m.expr>500){
+    html+=rec(rn++,'Remove bulk expressions',`${m.expr} expressions is unusually high. Even trivial expressions add management overhead. Delete any that don't contribute to the output.`);
   }
   if(primary&&primary.count>15){
     html+=rec(rn++,'Decouple heavy computation from interactive input',`${ei(primary.name)} triggers ${primary.count} downstream recalculations. Capture the value into a separate variable on drag-end (via a CL action) so the expensive chain only recomputes once, not on every frame.`);
@@ -591,7 +801,7 @@ function genReport(a, graphUrl){
   for(const [fid,f] of Object.entries(folders)){const items=grouped[fid];if(!items||items.length===0)continue;html+=exprCard('f-'+fid,f.title,items,f.hidden,false)}
   html+=`</section>`;
 
-  html+=`<footer>Auto-generated by Desmos Graph Analyzer</footer>`;
+  html+=`<footer>Auto-generated by Desmos Graph Analyzer v2</footer>`;
   return html;
 }
 

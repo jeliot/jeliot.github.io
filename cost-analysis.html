@@ -90,10 +90,11 @@
 </head>
 <body>
 <div class="container">
+  <a href="index.html" style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.82rem;color:var(--text-muted);text-decoration:none;margin-bottom:0.5rem;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">&larr; Home</a>
 
   <header>
     <h1>Cost Analysis Methodology</h1>
-    <p class="subtitle">How the <a href="analyze.html">Desmos Graph Analyzer</a> estimates expression cost and performance scores</p>
+    <p class="subtitle">How the <a href="analysis2.html">Desmos Graph Analyzer v2</a> estimates expression cost and performance scores</p>
   </header>
 
   <div class="callout accent">
@@ -104,7 +105,7 @@
   <!-- Level 1: Per-Expression Cost -->
   <section>
     <h2><span class="section-icon">&#9889;</span> Level 1: Per-Expression Cost</h2>
-    <p>Every expression in the graph is assigned an estimated cost by the <span class="expr-inline">eCost()</span> function. The cost starts at a base of <strong>1</strong> and accumulates penalties based on which computational patterns are detected in the LaTeX.</p>
+    <p>Every expression in the graph is assigned an estimated cost by the <span class="expr-inline">eCost()</span> function. The cost starts at a base of <strong>1</strong> and accumulates penalties based on which computational patterns are detected in the LaTeX. Expressions over 2,000 characters (long data lists) are assigned a flat cost of 1.</p>
 
     <table class="metric-table">
       <thead>
@@ -124,12 +125,17 @@
         <tr>
           <td>Recursive definition</td>
           <td class="val red">+30</td>
-          <td class="rationale">By far the heaviest penalty. A recursive expression like <span class="expr-inline">f(n) = g(f(n-1))</span> recomputes its entire chain from the base case on every evaluation. The actual cost multiplies with the recursion depth.</td>
+          <td class="rationale">By far the heaviest penalty. A recursive expression like <span class="expr-inline">f(n) = g(f(n-1))</span> recomputes its entire chain from the base case on every evaluation.</td>
         </tr>
         <tr>
-          <td>Large inline data (&gt;2000 chars)</td>
-          <td class="val orange">+15</td>
-          <td class="rationale">Expressions with thousands of characters of LaTeX are typically hardcoded coordinate or vector data. These consume significant memory and slow parsing.</td>
+          <td>Nested summation + integral</td>
+          <td class="val red">+20</td>
+          <td class="rationale"><strong>New in v2.</strong> When a summation wraps a definite integral, the cost is multiplicative&mdash;each term requires numerical integration. This is one of the most expensive patterns possible.</td>
+        </tr>
+        <tr>
+          <td>Definite integral (<span class="expr-inline">&int;</span>)</td>
+          <td class="val orange">+10</td>
+          <td class="rationale"><strong>New in v2.</strong> Numerical integration is significantly more expensive than algebraic operations. Applied only when the integral is <em>not</em> nested inside a summation (which gets +20 instead).</td>
         </tr>
         <tr>
           <td>List comprehension (<span class="expr-inline">for</span>)</td>
@@ -139,7 +145,12 @@
         <tr>
           <td>Summation / <span class="expr-inline">total</span></td>
           <td class="val yellow">+6</td>
-          <td class="rationale">Iterates over an entire list to produce a sum. Large lists mean more iterations per frame.</td>
+          <td class="rationale">Iterates over an entire list to produce a sum. Applied only when no integral is nested inside (which gets +20 instead).</td>
+        </tr>
+        <tr>
+          <td><span class="expr-inline">repeat</span> operation</td>
+          <td class="val yellow">+6</td>
+          <td class="rationale"><strong>New in v2.</strong> Duplicates curves or points for rendering. Each repetition requires independent GPU processing, stress-testing the rendering pipeline.</td>
         </tr>
         <tr>
           <td>Polygon operation</td>
@@ -161,6 +172,11 @@
           <td class="val green">+1</td>
           <td class="rationale">Branching logic. Individually cheap, but many nested piecewise expressions add up.</td>
         </tr>
+        <tr>
+          <td>Long data list (&gt;2000 chars)</td>
+          <td class="val muted">flat 1</td>
+          <td class="rationale">Hardcoded data is evaluated once and cached. The full cost formula is skipped; these are flagged but not penalized.</td>
+        </tr>
       </tbody>
     </table>
 
@@ -174,6 +190,18 @@
         <span class="highlight">No other patterns detected</span>
       </div>
       <div class="result" style="color: var(--red);">Total: 31.1</div>
+    </div>
+
+    <div class="example-card">
+      <h4>Example: Scoring a nested sum + integral (v2)</h4>
+      <div class="calc">
+        Expression: <span class="expr-inline">f_hard(a) = &sum;(n=1 to 10^k, &int;(0 to n, sin(t-a)dt))</span><br><br>
+        <span class="highlight">Base cost:</span> 1.0<br>
+        <span class="highlight">LaTeX length</span> (91 chars &times; 0.003): +0.27<br>
+        <span class="highlight">Nested sum+integral:</span> +20.0<br>
+        <span class="highlight">No other patterns detected</span>
+      </div>
+      <div class="result" style="color: var(--red);">Total: 21.3</div>
     </div>
 
     <div class="example-card">
@@ -233,15 +261,23 @@
     <div class="formula">
       <span class="kw">score</span> <span class="op">=</span> <span class="num">100</span><br>
       &nbsp;&nbsp;<span class="op">&minus;</span> recursiveDefinitions <span class="op">&times;</span> <span class="num">18</span> &nbsp;&nbsp;<span class="comment">// heaviest penalty</span><br>
-      &nbsp;&nbsp;<span class="op">&minus;</span> largeDataLists <span class="op">&times;</span> <span class="num">12</span><br>
-      &nbsp;&nbsp;<span class="op">&minus;</span> max(0, draggables &minus; 1) <span class="op">&times;</span> <span class="num">5</span> &nbsp;&nbsp;<span class="comment">// first is free</span><br>
+      &nbsp;&nbsp;<span class="op">&minus;</span> nestedSumIntegrals <span class="op">&times;</span> <span class="num">15</span> &nbsp;&nbsp;<span class="comment">// <strong>v2</strong> – multiplicative cost</span><br>
+      &nbsp;&nbsp;<span class="op">&minus;</span> integrals <span class="op">&times;</span> <span class="num">8</span> &nbsp;&nbsp;<span class="comment">// <strong>v2</strong> – numerical integration</span><br>
+      &nbsp;&nbsp;<span class="op">&minus;</span> max(0, draggables + movablePoints &minus; 1) <span class="op">&times;</span> <span class="num">5</span> &nbsp;&nbsp;<span class="comment">// first is free</span><br>
+      &nbsp;&nbsp;<span class="op">&minus;</span> implicitCurveFamilies <span class="op">&times;</span> <span class="num">5</span> &nbsp;&nbsp;<span class="comment">// <strong>v2</strong> – list-range curve plotting</span><br>
+      &nbsp;&nbsp;<span class="op">&minus;</span> repeatOperations <span class="op">&times;</span> <span class="num">4</span> &nbsp;&nbsp;<span class="comment">// <strong>v2</strong> – rendering multiplier</span><br>
       &nbsp;&nbsp;<span class="op">&minus;</span> max(0, images &minus; 3) <span class="op">&times;</span> <span class="num">2.5</span> &nbsp;&nbsp;<span class="comment">// first 3 are free</span><br>
       &nbsp;&nbsp;<span class="op">&minus;</span> listComprehensions <span class="op">&times;</span> <span class="num">3.5</span><br>
       &nbsp;&nbsp;<span class="op">&minus;</span> summations <span class="op">&times;</span> <span class="num">3</span><br>
-      &nbsp;&nbsp;<span class="op">&minus;</span> max(0, expressions &minus; 50) <span class="op">&times;</span> <span class="num">0.15</span> &nbsp;&nbsp;<span class="comment">// gentle scaling</span><br>
+      &nbsp;&nbsp;<span class="op">&minus;</span> max(0, expressions &minus; 50) <span class="op">&times;</span> <span class="num">0.3</span> &nbsp;&nbsp;<span class="comment">// <strong>v2</strong> – steeper when &gt;500 exprs (<em>was 0.15</em>)</span><br>
       &nbsp;&nbsp;<span class="op">&minus;</span> max(0, hiddenComputing &minus; 10) <span class="op">&times;</span> <span class="num">0.4</span><br>
       &nbsp;&nbsp;<span class="op">&minus;</span> polygonOps <span class="op">&times;</span> <span class="num">1.5</span><br>
       &nbsp;&nbsp;<span class="op">&minus;</span> avgLatexLength <span class="op">&times;</span> <span class="num">0.015</span>
+    </div>
+
+    <div class="callout accent" style="margin-top:0.5rem;">
+      <strong>What changed in v2?</strong>
+      Five new factors were added (nested sum+integral, integrals, repeat operations, implicit curve families, movable points), and the expression-count penalty was steepened to &minus;0.3 per expression beyond 50 when a graph has over 500 expressions.
     </div>
 
     <table class="metric-table">
@@ -256,16 +292,34 @@
           <td class="rationale">A single recursion can dominate frame time. Two can make a graph unusable.</td>
         </tr>
         <tr>
-          <td>Large data lists</td>
-          <td class="val orange">&minus;12 each</td>
+          <td>Nested sum+integral <span style="color:var(--accent);font-size:0.7rem;font-weight:600">v2</span></td>
+          <td class="val red">&minus;15 each</td>
           <td>None</td>
-          <td class="rationale">Hardcoded data over 2000 chars consumes memory and slows the expression parser.</td>
+          <td class="rationale">When a summation wraps an integral, each iteration triggers a full numerical solve. Extremely expensive.</td>
         </tr>
         <tr>
-          <td>Draggable elements</td>
+          <td>Integrals <span style="color:var(--accent);font-size:0.7rem;font-weight:600">v2</span></td>
+          <td class="val orange">&minus;8 each</td>
+          <td>None</td>
+          <td class="rationale">Numerical integration is one of the most expensive single operations Desmos performs.</td>
+        </tr>
+        <tr>
+          <td>Draggable / movable points <span style="color:var(--accent);font-size:0.7rem;font-weight:600">v2</span></td>
           <td class="val orange">&minus;5 each</td>
           <td>First 1 free</td>
-          <td class="rationale">Each additional draggable point multiplies the number of dependency chains that fire per frame.</td>
+          <td class="rationale">v2 merges sliders, draggable elements, and movable points (constant point definitions) into a single count. Each additional one multiplies dependency chains per frame.</td>
+        </tr>
+        <tr>
+          <td>Implicit curve families <span style="color:var(--accent);font-size:0.7rem;font-weight:600">v2</span></td>
+          <td class="val orange">&minus;5 each</td>
+          <td>None</td>
+          <td class="rationale">Expressions like <span class="expr-inline">y = f(x, n) for n=[1...50]</span> generate many implicit curves that each need rendering.</td>
+        </tr>
+        <tr>
+          <td>Repeat operations <span style="color:var(--accent);font-size:0.7rem;font-weight:600">v2</span></td>
+          <td class="val yellow">&minus;4 each</td>
+          <td>None</td>
+          <td class="rationale">Each <span class="expr-inline">repeat</span> duplicates a curve for rendering, multiplying GPU work.</td>
         </tr>
         <tr>
           <td>Images</td>
@@ -287,9 +341,9 @@
         </tr>
         <tr>
           <td>Total expressions</td>
-          <td class="val accent">&minus;0.15 each</td>
+          <td class="val accent">&minus;0.3 each</td>
           <td>First 50 free</td>
-          <td class="rationale">Gentle penalty for large graphs. 100 extra expressions costs only &minus;15.</td>
+          <td class="rationale">v2 raised the per-expression penalty from 0.15 to 0.3 for graphs with &gt;500 expressions, where overhead becomes significant.</td>
         </tr>
         <tr>
           <td>Hidden computing expressions</td>
@@ -321,21 +375,25 @@
     </div>
 
     <div class="example-card">
-      <h4>Example: The ocean current duck graph</h4>
+      <h4>Example: A complex graph with 1035 expressions, integrals, and repeat ops (v2 formula)</h4>
       <div class="calc">
         <span class="highlight">100</span>
-        &minus; 2 recursive defs &times; 18 = <span style="color:var(--red)">&minus;36</span><br>
-        &minus; 1 large data list &times; 12 = <span style="color:var(--orange)">&minus;12</span><br>
-        &minus; max(0, 2&minus;1) draggables &times; 5 = <span style="color:var(--orange)">&minus;5</span><br>
-        &minus; max(0, 7&minus;3) images &times; 2.5 = <span style="color:var(--yellow)">&minus;10</span><br>
-        &minus; 3 list comprehensions &times; 3.5 = <span style="color:var(--yellow)">&minus;10.5</span><br>
-        &minus; 2 summations &times; 3 = <span style="color:var(--yellow)">&minus;6</span><br>
-        &minus; max(0, 120&minus;50) &times; 0.15 = <span style="color:var(--accent)">&minus;10.5</span><br>
-        &minus; max(0, 40&minus;10) &times; 0.4 = <span style="color:var(--accent)">&minus;12</span><br>
-        &minus; 8 polygon ops &times; 1.5 = <span style="color:var(--teal)">&minus;12</span><br>
-        &minus; avg 90 chars &times; 0.015 = <span style="color:var(--text-muted)">&minus;1.35</span>
+        &minus; 0 recursive defs &times; 18 = <span style="color:var(--text-muted)">0</span><br>
+        &minus; 1 nested sum+integral &times; 15 = <span style="color:var(--red)">&minus;15</span><br>
+        &minus; 3 integrals &times; 8 = <span style="color:var(--orange)">&minus;24</span><br>
+        &minus; max(0, 4&minus;1) draggable/movable &times; 5 = <span style="color:var(--orange)">&minus;15</span><br>
+        &minus; 2 implicit curve families &times; 5 = <span style="color:var(--orange)">&minus;10</span><br>
+        &minus; 5 repeat ops &times; 4 = <span style="color:var(--yellow)">&minus;20</span><br>
+        &minus; max(0, 0&minus;3) images &times; 2.5 = <span style="color:var(--text-muted)">0</span><br>
+        &minus; 2 list comprehensions &times; 3.5 = <span style="color:var(--yellow)">&minus;7</span><br>
+        &minus; 1 summation &times; 3 = <span style="color:var(--yellow)">&minus;3</span><br>
+        &minus; max(0, 1035&minus;50) &times; 0.3 = <span style="color:var(--accent)">&minus;295.5</span><br>
+        &minus; max(0, 10&minus;10) &times; 0.4 = <span style="color:var(--text-muted)">0</span><br>
+        &minus; 0 polygon ops &times; 1.5 = <span style="color:var(--text-muted)">0</span><br>
+        &minus; avg 35 chars &times; 0.015 = <span style="color:var(--text-muted)">&minus;0.53</span>
       </div>
       <div class="result" style="color: var(--red);">Score: ~0 (Critical)</div>
+      <p style="font-size:0.82rem; color:var(--text-muted); margin-top:0.5rem;">The massive expression count alone exceeds the 100-point budget. In v2, the steeper &minus;0.3 per-expression penalty catches graphs that pad their count with trivial color/note expressions.</p>
     </div>
   </section>
 
@@ -355,23 +413,27 @@
         </tr>
         <tr>
           <td><strong>Summary Stat Cards</strong></td>
-          <td class="rationale">The highest triggered-cost input is featured. Key metric counts are auto-selected.</td>
+          <td class="rationale">The highest triggered-cost input is featured. Key metric counts (including v2 metrics like integrals, repeat ops, movable points, implicit curves) are auto-selected.</td>
         </tr>
         <tr>
           <td><strong>Root Cause Callouts</strong></td>
-          <td class="rationale">Generated from the highest per-expression costs. Recursive definitions and large lists always surface.</td>
+          <td class="rationale">Generated from the highest per-expression costs. v2 adds dedicated callouts for nested sum+integral, standalone integrals, repeat operations, implicit curve families, high expression count (&gt;500), and movable point dependencies.</td>
         </tr>
         <tr>
           <td><strong>Dependency Flow Diagram</strong></td>
           <td class="rationale">The primary input (highest triggered cost) is shown. Nodes are colored by per-expression cost: <span class="flow-box red" style="font-size:0.65rem">heavy (&gt;20)</span> <span class="flow-box orange" style="font-size:0.65rem;background:var(--orange-glow);border-color:var(--orange);color:var(--orange)">compute (&gt;8)</span> <span class="flow-box green" style="font-size:0.65rem">output</span></td>
         </tr>
         <tr>
+          <td><strong>Functional Dependency Graph</strong> <span style="color:var(--accent);font-size:0.7rem;font-weight:600">v2</span></td>
+          <td class="rationale">New section showing function definitions with their parameters, callers, callees, and argument details. Also lists variables with their upstream/downstream dependencies and function calls.</td>
+        </tr>
+        <tr>
           <td><strong>Expressions by Impact</strong></td>
-          <td class="rationale">Grouped by per-expression cost thresholds: Critical (&gt;20 or recursive), High (&gt;6), Medium (&gt;2.5), Low (rest).</td>
+          <td class="rationale">Grouped by per-expression cost thresholds: Critical (&gt;20 or recursive), High (&gt;6), Medium (&gt;2.5), Low (rest). Each group shows its total cost.</td>
         </tr>
         <tr>
           <td><strong>Function Cost Analysis</strong></td>
-          <td class="rationale">Functions sorted by per-expression cost. Progress bars show relative cost within the group.</td>
+          <td class="rationale">Functions sorted by per-expression cost. v2 adds "Reads", "Calls", and "Called by" summaries for each function, using the dependency graph data.</td>
         </tr>
         <tr>
           <td><strong>Real-Time Groups</strong></td>
@@ -379,11 +441,68 @@
         </tr>
         <tr>
           <td><strong>Cost Breakdown</strong></td>
-          <td class="rationale">Per-expression costs summed by category. Percentages show where total cost is concentrated.</td>
+          <td class="rationale">Per-expression costs summed by category. v2 adds categories for integrals (including nested in sums) and repeat operations.</td>
         </tr>
         <tr>
           <td><strong>Recommendations</strong></td>
-          <td class="rationale">Triggered by specific metric thresholds (e.g., recursive count &gt; 0, triggered count &gt; 15, hidden folders &gt; 0).</td>
+          <td class="rationale">Triggered by specific metric thresholds. v2 adds recommendations for nested sum+integral, standalone integrals, repeat operations, implicit curve families, and high expression count.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- Functional Dependency Graph -->
+  <section>
+    <h2><span class="section-icon">&#128268;</span> Functional Dependency Graph <span style="color:var(--accent);font-size:0.7rem;font-weight:600">v2</span></h2>
+    <p>Version 2 introduces a dedicated section that maps every function and variable to its callers, callees, and the specific variables passed as arguments. This goes beyond the basic "depends-on / depended-by" graph used in v1.</p>
+
+    <div class="diagram">
+      <h3>How it works</h3>
+      <ol style="color: var(--text-muted); font-size: 0.88rem; padding-left: 1.25rem; line-height: 2;">
+        <li><strong style="color:var(--text)">Parse function calls</strong> &mdash; A <span class="expr-inline">findFnCalls()</span> function scans each expression's LaTeX for patterns like <span class="expr-inline">f(arg1, arg2)</span>, handling nested parentheses and brackets while excluding built-in functions (sin, cos, etc.).</li>
+        <li><strong style="color:var(--text)">Extract argument variables</strong> &mdash; For each call site, the individual arguments are split and scanned for variable references, producing a list of variables passed to each parameter.</li>
+        <li><strong style="color:var(--text)">Build call maps</strong> &mdash; Two maps are constructed:
+          <ul style="margin-top:0.25rem;list-style:disc;padding-left:1rem;">
+            <li><span class="expr-inline">callsTo[callerName]</span> &mdash; which functions each expression calls and what variables it passes.</li>
+            <li><span class="expr-inline">calledBy[functionName]</span> &mdash; which expressions call this function and what variables they pass.</li>
+          </ul>
+        </li>
+        <li><strong style="color:var(--text)">Display in report</strong> &mdash; Functions show their signature, cost, dependencies, callers (with argument tables), and callees. Variables show their upstream/downstream connections and function calls.</li>
+      </ol>
+    </div>
+
+    <div class="example-card">
+      <h4>Example: Function <span class="expr-inline">f_{low}(x, y, t)</span></h4>
+      <div class="calc">
+        <span class="highlight">Depends on:</span> a, b, c_{oeff}<br>
+        <span class="highlight">Called by:</span><br>
+        &nbsp;&nbsp;<span class="expr-inline">p_{ath}</span> passes <span class="expr-inline">[x_{0}, y_{0}, t_{step}]</span><br>
+        &nbsp;&nbsp;<span class="expr-inline">v_{ec}</span> passes <span class="expr-inline">[P.x, P.y, 0]</span><br>
+        <span class="highlight">Calls:</span> g_{rad}(x, y), h_{eat}(t)
+      </div>
+      <p style="font-size:0.82rem; color:var(--text-muted); margin-top:0.5rem;">This tells you that changing variable <span class="expr-inline">a</span> affects <span class="expr-inline">f_{low}</span>, which in turn affects <span class="expr-inline">p_{ath}</span> and <span class="expr-inline">v_{ec}</span>. It also shows that dragging point <span class="expr-inline">P</span> triggers <span class="expr-inline">f_{low}</span> via <span class="expr-inline">v_{ec}</span>.</p>
+    </div>
+  </section>
+
+  <!-- Special Handling -->
+  <section>
+    <h2><span class="section-icon">&#128679;</span> Special Handling Rules</h2>
+    <table class="metric-table">
+      <thead>
+        <tr><th>Rule</th><th>Behavior</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Long data lists (&gt;2000 chars)</td>
+          <td class="rationale">Assigned a flat cost of 1. Flagged in the report as informational but excluded from cost penalties. These are typically hardcoded lookup tables.</td>
+        </tr>
+        <tr>
+          <td>Expressions containing <span class="expr-inline">j_{uice}</span></td>
+          <td class="rationale">Completely skipped during analysis. These are Desmos internal/utility expressions and do not contribute to user-facing performance.</td>
+        </tr>
+        <tr>
+          <td>Movable points <span style="color:var(--accent);font-size:0.7rem;font-weight:600">v2</span></td>
+          <td class="rationale">Constant point definitions like <span class="expr-inline">P = (3, 5)</span> are detected and counted alongside sliders as inputs. Expressions referencing <span class="expr-inline">P.x</span> or <span class="expr-inline">P.y</span> are tracked as dependents.</td>
         </tr>
       </tbody>
     </table>
@@ -395,7 +514,7 @@
   </div>
 
   <footer>
-    <a href="analyze.html">Back to Graph Analyzer</a> &nbsp;&middot;&nbsp;
+    <a href="analysis2.html">Back to Graph Analyzer v2</a> &nbsp;&middot;&nbsp;
     <a href="compare.html">Graph Comparator</a> &nbsp;&middot;&nbsp;
     Cost Analysis Methodology
   </footer>

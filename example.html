@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Desmos Graph Performance Diagnosis</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-hover: #222632;
+      --border: #2a2e3d;
+      --text: #e4e6ed;
+      --text-muted: #8b8fa3;
+      --accent: #6c7ee1;
+      --accent-glow: rgba(108, 126, 225, 0.15);
+      --red: #e85d6f;
+      --red-glow: rgba(232, 93, 111, 0.12);
+      --orange: #e8a04f;
+      --orange-glow: rgba(232, 160, 79, 0.12);
+      --yellow: #e8d44f;
+      --yellow-glow: rgba(232, 212, 79, 0.10);
+      --green: #4fbe7f;
+      --green-glow: rgba(79, 190, 127, 0.10);
+      --teal: #4fb8c4;
+      --teal-glow: rgba(79, 184, 196, 0.10);
+      --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    header {
+      text-align: center;
+      padding: 3rem 0 2.5rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 0.5rem;
+    }
+
+    header .subtitle {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    header .subtitle a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    header .subtitle a:hover {
+      text-decoration: underline;
+    }
+
+    .severity-banner {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 1rem 1.25rem;
+      border-radius: 10px;
+      margin-bottom: 2rem;
+      border: 1px solid;
+    }
+
+    .severity-banner.critical {
+      background: var(--red-glow);
+      border-color: rgba(232, 93, 111, 0.25);
+    }
+
+    .severity-banner .icon { font-size: 1.4rem; }
+    .severity-banner .label {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .severity-banner .label .tag {
+      display: inline-block;
+      padding: 0.1em 0.5em;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-right: 0.5rem;
+    }
+    .severity-banner.critical .tag {
+      background: var(--red);
+      color: var(--bg);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+      text-align: center;
+    }
+
+    .stat-card .value {
+      font-size: 2rem;
+      font-weight: 700;
+      font-family: var(--mono);
+      line-height: 1.2;
+    }
+
+    .stat-card .label {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-top: 0.25rem;
+    }
+
+    .stat-card.red .value { color: var(--red); }
+    .stat-card.orange .value { color: var(--orange); }
+    .stat-card.accent .value { color: var(--accent); }
+    .stat-card.teal .value { color: var(--teal); }
+
+    section {
+      margin-bottom: 2.5rem;
+    }
+
+    section h2 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    section h2 .section-icon {
+      font-size: 1.2rem;
+    }
+
+    section > p, section > .desc {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .card + .card { margin-top: 1rem; }
+
+    .card-header {
+      padding: 1rem 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+
+    .card-header:hover {
+      background: var(--surface-hover);
+    }
+
+    .card-header h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.15em 0.55em;
+      border-radius: 5px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .badge.critical { background: var(--red); color: var(--bg); }
+    .badge.high { background: var(--orange); color: var(--bg); }
+    .badge.medium { background: var(--yellow); color: var(--bg); }
+    .badge.low { background: var(--green); color: var(--bg); }
+    .badge.info { background: var(--accent); color: #fff; }
+
+    .chevron {
+      transition: transform 0.2s;
+      color: var(--text-muted);
+    }
+    .card.open .chevron { transform: rotate(180deg); }
+
+    .card-body {
+      display: none;
+      padding: 0 1.25rem 1.25rem;
+    }
+
+    .card.open .card-body { display: block; }
+
+    .expr-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    .expr-table th {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .expr-table td {
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid rgba(42, 46, 61, 0.5);
+      vertical-align: top;
+    }
+
+    .expr-table tr:last-child td { border-bottom: none; }
+
+    .expr-table .latex {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--accent);
+      word-break: break-all;
+    }
+
+    .expr-table .folder-tag {
+      font-size: 0.7rem;
+      padding: 0.1em 0.4em;
+      border-radius: 3px;
+      background: rgba(108, 126, 225, 0.12);
+      color: var(--accent);
+      white-space: nowrap;
+    }
+
+    .dep-chain {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      padding: 1rem 0;
+    }
+
+    .dep-node {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+
+    .dep-connector {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 24px;
+    }
+
+    .dep-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .dep-line {
+      width: 2px;
+      height: 28px;
+      background: var(--border);
+    }
+
+    .dep-content {
+      padding-bottom: 0.75rem;
+    }
+
+    .dep-content .name {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .dep-content .detail {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 0.15rem;
+    }
+
+    .flow-diagram {
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
+      padding: 1.5rem;
+      overflow-x: auto;
+    }
+
+    .flow-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .flow-box {
+      padding: 0.4em 0.75em;
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      font-weight: 600;
+      border: 1px solid;
+      white-space: nowrap;
+    }
+
+    .flow-box.input { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
+    .flow-box.compute { background: var(--orange-glow); border-color: var(--orange); color: var(--orange); }
+    .flow-box.heavy { background: var(--red-glow); border-color: var(--red); color: var(--red); }
+    .flow-box.output { background: var(--green-glow); border-color: var(--green); color: var(--green); }
+    .flow-box.display { background: var(--teal-glow); border-color: var(--teal); color: var(--teal); }
+
+    .flow-arrow {
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    .recommendations {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .rec-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    .rec-num {
+      background: var(--accent);
+      color: var(--bg);
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+
+    .rec-body h4 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .rec-body p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .cost-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0.5rem 0;
+    }
+
+    .cost-track {
+      flex: 1;
+      height: 8px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .cost-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.6s ease;
+    }
+
+    .cost-label {
+      font-size: 0.75rem;
+      font-family: var(--mono);
+      color: var(--text-muted);
+      min-width: 4ch;
+      text-align: right;
+    }
+
+    .legend {
+      display: flex;
+      gap: 1.25rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+    }
+
+    .callout {
+      padding: 1rem 1.25rem;
+      border-radius: 8px;
+      border-left: 3px solid;
+      margin: 1rem 0;
+      font-size: 0.88rem;
+    }
+
+    .callout.red {
+      background: var(--red-glow);
+      border-color: var(--red);
+    }
+
+    .callout.orange {
+      background: var(--orange-glow);
+      border-color: var(--orange);
+    }
+
+    .callout.accent {
+      background: var(--accent-glow);
+      border-color: var(--accent);
+    }
+
+    .callout strong {
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+
+    .expr-inline {
+      font-family: var(--mono);
+      font-size: 0.82em;
+      background: rgba(108, 126, 225, 0.12);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      color: var(--accent);
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem 0;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      border-top: 1px solid var(--border);
+    }
+
+    @media (max-width: 640px) {
+      header h1 { font-size: 1.5rem; }
+      .summary-grid { grid-template-columns: 1fr 1fr; }
+      .flow-row { font-size: 0.7rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>Desmos Graph Performance Diagnosis</h1>
+    <p class="subtitle">
+      Analysis of <a href="https://www.desmos.com/calculator/yan9b6afw1" target="_blank">yan9b6afw1</a>
+       &mdash; "Untitled Graph" (Ocean Current Ducky Tracker)
+    </p>
+  </header>
+
+  <div class="severity-banner critical">
+    <span class="icon">&#9888;&#65039;</span>
+    <span class="label">
+      <span class="tag">Performance Issue Identified</span>
+      Dragging the duck triggers a 50-deep recursive contour computation plus 6 point-in-polygon checks, all recalculating on every frame.
+    </span>
+  </div>
+
+  <!-- Summary Stats -->
+  <div class="summary-grid">
+    <div class="stat-card red">
+      <div class="value">50&times;2</div>
+      <div class="label">Recursive Steps per Frame</div>
+    </div>
+    <div class="stat-card orange">
+      <div class="value">~700</div>
+      <div class="label">Vector Field Lookups</div>
+    </div>
+    <div class="stat-card accent">
+      <div class="value">28</div>
+      <div class="label">Expressions Depend on Drag</div>
+    </div>
+    <div class="stat-card teal">
+      <div class="value">6</div>
+      <div class="label">Polygon Hit-Tests per Frame</div>
+    </div>
+  </div>
+
+  <!-- Section: Root Cause -->
+  <section>
+    <h2><span class="section-icon">&#128270;</span> Root Cause Summary</h2>
+    <div class="callout red">
+      <strong>Primary Bottleneck: Recursive Contour Computation</strong>
+      The expressions <span class="expr-inline">c_ontour1(n)</span> and <span class="expr-inline">c_ontour2(n)</span> each recurse 50 levels deep. Every recursive step calls <span class="expr-inline">p_next(p)</span>, which itself calls two expensive functions: <span class="expr-inline">v_field(p)</span> (bilinear interpolation in a ~700-element vector list) and <span class="expr-inline">v_allContinents(p)</span> (shore-force summation over continent vertices). When you drag the duck, <strong>all 50 steps recompute from scratch on every mouse-move frame</strong>.
+    </div>
+    <div class="callout orange">
+      <strong>Secondary Bottleneck: Point-in-Polygon Checks</strong>
+      Six separate <span class="expr-inline">isPointInPolygon</span> calls run on every drag frame, each iterating over the vertices of a continent region (up to 17 vertices per region). These determine whether the duck is over land.
+    </div>
+    <div class="callout accent">
+      <strong>Rendering Load: Multiple Image Instances</strong>
+      The rubber duck image is rendered at 7+ different positions simultaneously (wrapping copies, drag copies, animation copies, trail-head copies), each dependent on the drag point coordinates.
+    </div>
+  </section>
+
+  <!-- Section: Dependency Flow -->
+  <section>
+    <h2><span class="section-icon">&#128200;</span> Drag Point Dependency Flow</h2>
+    <p class="desc">When the user drags the duck, variables <span class="expr-inline">a</span> and <span class="expr-inline">b</span> change. This is the cascade of recomputation that follows:</p>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Input variable</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div> Compute step</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> Heavy computation</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Derived output</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--teal)"></div> Display / render</div>
+    </div>
+
+    <div class="flow-diagram">
+      <div class="flow-row">
+        <div class="flow-box input">a, b (drag)</div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-box compute">p_particleDrag1</div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-box compute">c_ontour1(1)</div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-box heavy">c_ontour1(2..50)</div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-box output">P_trail1 [50 pts]</div>
+      </div>
+      <div class="flow-row" style="padding-left: 2rem;">
+        <span class="flow-arrow">&darr;</span>
+        <span style="color:var(--text-muted); font-size:0.78rem;">each step calls:</span>
+      </div>
+      <div class="flow-row" style="padding-left: 3rem;">
+        <div class="flow-box heavy">p_next(p)</div>
+        <span class="flow-arrow">=</span>
+        <div class="flow-box heavy">v_field(p)</div>
+        <span class="flow-arrow">+</span>
+        <div class="flow-box heavy">v_allContinents(p)</div>
+      </div>
+      <div class="flow-row" style="padding-left: 5rem;">
+        <span class="flow-arrow">&darr;</span>
+      </div>
+      <div class="flow-row" style="padding-left: 5rem;">
+        <div class="flow-box compute">v_buoy[index]</div>
+        <span style="color:var(--text-muted); font-size:0.75rem;">(bilinear interp in ~700 vectors)</span>
+        &emsp;
+        <div class="flow-box compute">v_fromShore &times; N edges</div>
+      </div>
+      <hr style="border:none; border-top:1px solid var(--border); margin:0.75rem 0;">
+      <div class="flow-row">
+        <div class="flow-box input">a, b</div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-box compute">P = p_particleDrag1</div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-box compute">b_a..b_f (6&times; isPointInPolygon)</div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-box output">i_sInContinent</div>
+      </div>
+      <hr style="border:none; border-top:1px solid var(--border); margin:0.75rem 0;">
+      <div class="flow-row">
+        <div class="flow-box output">P_trail1</div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-box output">p_duck</div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-box display">Duck images &times;7+</div>
+        &emsp;
+        <div class="flow-box display">Trail points &times;50</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section: Expressions dependent on drag -->
+  <section>
+    <h2><span class="section-icon">&#128279;</span> Expressions Dependent on the Draggable Point</h2>
+    <p class="desc">These expressions all recalculate when variables <span class="expr-inline">a</span> and/or <span class="expr-inline">b</span> change (i.e., when the duck is dragged).</p>
+
+    <div class="card open" id="card-direct">
+      <div class="card-header" onclick="toggleCard('card-direct')">
+        <h3><span class="badge critical">Critical</span> Direct Dependencies &amp; Recursive Chain</h3>
+        <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <table class="expr-table">
+          <thead>
+            <tr><th>Expression</th><th>LaTeX</th><th>Folder</th><th>Impact</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>a</strong></td>
+              <td class="latex">a = -147.7</td>
+              <td><span class="folder-tag">Contour #1</span></td>
+              <td>Draggable x-coordinate</td>
+            </tr>
+            <tr>
+              <td><strong>b</strong></td>
+              <td class="latex">b = -73.1</td>
+              <td><span class="folder-tag">Contour #1</span></td>
+              <td>Draggable y-coordinate</td>
+            </tr>
+            <tr>
+              <td><strong>p_particleDrag1</strong></td>
+              <td class="latex">(a, b{i_sAnimating=0})</td>
+              <td><span class="folder-tag">Contour #1</span></td>
+              <td>Drag point + duck image center</td>
+            </tr>
+            <tr>
+              <td><strong>x_moveCaptured</strong></td>
+              <td class="latex">x_moveCaptured = a</td>
+              <td><span class="folder-tag">Contour #1</span></td>
+              <td>Captured x for contour seed</td>
+            </tr>
+            <tr>
+              <td><strong>y_moveCaptured</strong></td>
+              <td class="latex">y_moveCaptured = b</td>
+              <td><span class="folder-tag">Contour #1</span></td>
+              <td>Captured y for contour seed</td>
+            </tr>
+            <tr>
+              <td><strong>c_ontour1(1)</strong></td>
+              <td class="latex">c_ontour1(1) = (x_moveCaptured, y_moveCaptured)</td>
+              <td><span class="folder-tag">Contour #1</span></td>
+              <td>Seed point for recursion</td>
+            </tr>
+            <tr>
+              <td><strong>c_ontour1(n)</strong></td>
+              <td class="latex">c_ontour1(n) = p_next(c_ontour1(n-1))</td>
+              <td><span class="folder-tag">Contour #1</span></td>
+              <td>50-deep recursion &mdash; main bottleneck</td>
+            </tr>
+            <tr>
+              <td><strong>P_trail1</strong></td>
+              <td class="latex">P_trail1 = c_ontour1(n) for n=[1...n_max]</td>
+              <td><span class="folder-tag">Contour #1</span></td>
+              <td>Materialized list of 50 trail points</td>
+            </tr>
+            <tr>
+              <td><strong>p_duck</strong></td>
+              <td class="latex">P_trail1[n_max - n_umShowing]</td>
+              <td><span class="folder-tag">Contour #1</span></td>
+              <td>Animated duck head position</td>
+            </tr>
+            <tr>
+              <td><strong>p_particle1</strong></td>
+              <td class="latex">(a, b{i_sAnimating=1})</td>
+              <td><span class="folder-tag">Contour #1</span></td>
+              <td>Animation-mode particle position</td>
+            </tr>
+            <tr>
+              <td><strong>p_carryover1</strong></td>
+              <td class="latex">(a, b)</td>
+              <td><span class="folder-tag">Contour #1</span></td>
+              <td>State carry-over point</td>
+            </tr>
+            <tr>
+              <td><strong>x_carryover1 / y_carryover1</strong></td>
+              <td class="latex">p_carryover1.x / .y</td>
+              <td><span class="folder-tag">Contour #1</span></td>
+              <td>Decomposed carry-over coordinates</td>
+            </tr>
+            <tr>
+              <td><strong>l_atitude / s_ignLat</strong></td>
+              <td class="latex">abs(a) / sign(a)</td>
+              <td><span class="folder-tag">Contour #1</span></td>
+              <td>Latitude calculations from x-coord</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="card-polygon">
+      <div class="card-header" onclick="toggleCard('card-polygon')">
+        <h3><span class="badge high">High</span> Point-in-Polygon Hit Tests</h3>
+        <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;">These check whether the duck&rsquo;s position is inside any of 6 continent regions (Antarctica top/bottom, Africa, Australia, South America, North America). Each uses a ray-casting algorithm iterating over all polygon vertices.</p>
+        <table class="expr-table">
+          <thead>
+            <tr><th>Expression</th><th>LaTeX</th><th>Tests Against</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>P</strong></td>
+              <td class="latex">P = p_particleDrag1</td>
+              <td>&mdash; (alias)</td>
+            </tr>
+            <tr>
+              <td><strong>b_a</strong></td>
+              <td class="latex">isPointInPolygon(P, Antarctica South)</td>
+              <td>13 vertices</td>
+            </tr>
+            <tr>
+              <td><strong>b_b</strong></td>
+              <td class="latex">isPointInPolygon(P, Arctic North)</td>
+              <td>13 vertices</td>
+            </tr>
+            <tr>
+              <td><strong>b_c</strong></td>
+              <td class="latex">isPointInPolygon(P, C_region)</td>
+              <td>6 vertices</td>
+            </tr>
+            <tr>
+              <td><strong>b_d</strong></td>
+              <td class="latex">isPointInPolygon(P, D_region)</td>
+              <td>15 vertices</td>
+            </tr>
+            <tr>
+              <td><strong>b_e</strong></td>
+              <td class="latex">isPointInPolygon(P, E_region)</td>
+              <td>17 vertices</td>
+            </tr>
+            <tr>
+              <td><strong>b_f</strong></td>
+              <td class="latex">isPointInPolygon(P, F_region)</td>
+              <td>11 vertices</td>
+            </tr>
+            <tr>
+              <td><strong>i_sInContinent</strong></td>
+              <td class="latex">{b_a+b_b+b_c+b_d+b_e+b_f &gt; 0, 0}</td>
+              <td>Aggregated result</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="card-ui">
+      <div class="card-header" onclick="toggleCard('card-ui')">
+        <h3><span class="badge medium">Medium</span> UI State &amp; Display Expressions</h3>
+        <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <table class="expr-table">
+          <thead>
+            <tr><th>Expression</th><th>Description</th><th>Depends On</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>i_sTrackerInToolbar</strong></td>
+              <td>Checks if drag point is inside the toolbar bounding box</td>
+              <td>a, b, p_toolbar</td>
+            </tr>
+            <tr>
+              <td><strong>i_sUnderButton</strong></td>
+              <td>Checks if drag point is under the UI button</td>
+              <td>p_particleDrag1</td>
+            </tr>
+            <tr>
+              <td><strong>s_howInitialArrow</strong></td>
+              <td>Regression that hides the &ldquo;Drag&rdquo; arrow after first move</td>
+              <td>p_particleDrag1, p_trackerStart</td>
+            </tr>
+            <tr>
+              <td><strong>Duck image (id 1049)</strong></td>
+              <td>Primary duck &mdash; draggable, centered on p_particleDrag1</td>
+              <td>p_particleDrag1</td>
+            </tr>
+            <tr>
+              <td><strong>Duck wraps (id 1239)</strong></td>
+              <td>Wrap-around copies at &plusmn;360&deg;</td>
+              <td>p_particleDrag1</td>
+            </tr>
+            <tr>
+              <td><strong>Duck anim (id 1199)</strong></td>
+              <td>Animation-mode duck copies at &plusmn;360&deg;</td>
+              <td>p_particle1 (= a, b)</td>
+            </tr>
+            <tr>
+              <td><strong>Duck trail-head (id 1196)</strong></td>
+              <td>Duck at trail head position, wrapping copies</td>
+              <td>p_duck &larr; P_trail1</td>
+            </tr>
+            <tr>
+              <td><strong>Drag point visuals (ids 976, 978)</strong></td>
+              <td>Black/white dot overlay at drag position</td>
+              <td>p_particleDrag1</td>
+            </tr>
+            <tr>
+              <td><strong>Trail points (id 934)</strong></td>
+              <td>Open-circle trail outline, 50 points</td>
+              <td>P_trail1</td>
+            </tr>
+            <tr>
+              <td><strong>Arrow body/head/label</strong></td>
+              <td>Initial &ldquo;Drag&rdquo; arrow hint</td>
+              <td>s_howInitialArrow</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section: Expensive helper functions -->
+  <section>
+    <h2><span class="section-icon">&#9889;</span> Expensive Helper Functions (Called per Recursive Step)</h2>
+    <p class="desc">These functions are invoked inside <span class="expr-inline">p_next(p)</span>, which is called 50 times for each contour chain. The total cost multiplies across the recursion depth.</p>
+
+    <div class="card open" id="card-helpers">
+      <div class="card-header" onclick="toggleCard('card-helpers')">
+        <h3><span class="badge critical">Critical</span> Per-Step Function Costs</h3>
+        <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <div style="margin-bottom:1rem;">
+          <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:0.25rem;">
+            <span><span class="expr-inline">p_next(p)</span> &mdash; Particle advection step</span>
+            <span class="badge critical">x50 calls</span>
+          </div>
+          <div class="cost-bar">
+            <div class="cost-track"><div class="cost-fill" style="width:95%;background:var(--red)"></div></div>
+            <span class="cost-label">95%</span>
+          </div>
+          <p style="font-size:0.8rem;color:var(--text-muted)">Combines velocity field interpolation and continental shore forces to compute the next particle position. Uses mod/min/max for wrapping.</p>
+        </div>
+
+        <div style="margin-bottom:1rem;">
+          <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:0.25rem;">
+            <span><span class="expr-inline">v_field(p)</span> &mdash; Bilinear velocity interpolation</span>
+            <span class="badge high">~700 vector list</span>
+          </div>
+          <div class="cost-bar">
+            <div class="cost-track"><div class="cost-fill" style="width:70%;background:var(--orange)"></div></div>
+            <span class="cost-label">70%</span>
+          </div>
+          <p style="font-size:0.8rem;color:var(--text-muted)">Interpolates between 4 neighboring grid vectors from <span class="expr-inline">v_buoy</span> (a hardcoded list of ~700 2D vectors). Calls <span class="expr-inline">index(p)</span>, <span class="expr-inline">X(p)</span>, <span class="expr-inline">Y(p)</span> for grid coordinates.</p>
+        </div>
+
+        <div style="margin-bottom:1rem;">
+          <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:0.25rem;">
+            <span><span class="expr-inline">v_allContinents(p)</span> &mdash; Shore force summation</span>
+            <span class="badge high">N edge iterations</span>
+          </div>
+          <div class="cost-bar">
+            <div class="cost-track"><div class="cost-fill" style="width:60%;background:var(--orange)"></div></div>
+            <span class="cost-label">60%</span>
+          </div>
+          <p style="font-size:0.8rem;color:var(--text-muted)">Sums <span class="expr-inline">v_fromShore</span> over every edge of the nearest continent polygon. Each edge check involves distance calculation and conditional force computation. The <span class="expr-inline">getClosestContinent(p)</span> lookup adds branching cost.</p>
+        </div>
+
+        <div style="margin-bottom:1rem;">
+          <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:0.25rem;">
+            <span><span class="expr-inline">v_fromShore(p1, p2, a)</span> &mdash; Per-edge shore force</span>
+            <span class="badge medium">per edge</span>
+          </div>
+          <div class="cost-bar">
+            <div class="cost-track"><div class="cost-fill" style="width:35%;background:var(--yellow)"></div></div>
+            <span class="cost-label">35%</span>
+          </div>
+          <p style="font-size:0.8rem;color:var(--text-muted)">Calculates signed distance to a shore edge, applies cutoff threshold, and returns repulsion vector if within range. Calls <span class="expr-inline">distanceFromShore</span> and <span class="expr-inline">distance(p1,p2)</span>.</p>
+        </div>
+
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:0.25rem;">
+            <span><span class="expr-inline">getClosestContinent(p)</span> &mdash; Spatial zone lookup</span>
+            <span class="badge low">per step</span>
+          </div>
+          <div class="cost-bar">
+            <div class="cost-track"><div class="cost-fill" style="width:15%;background:var(--green)"></div></div>
+            <span class="cost-label">15%</span>
+          </div>
+          <p style="font-size:0.8rem;color:var(--text-muted)">Spatial partitioning: selects which continent polygon to test based on the point's position using nested piecewise conditionals (A, B, C, D, E, or F).</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section: Other Real-time Expressions -->
+  <section>
+    <h2><span class="section-icon">&#9200;</span> Other Expressions Calculating in Real-Time</h2>
+    <p class="desc">Beyond drag-dependent expressions, these compute in response to animation timing, viewport changes, or always-on conditions.</p>
+
+    <div class="card" id="card-animation">
+      <div class="card-header" onclick="toggleCard('card-animation')">
+        <h3><span class="badge info">Animation</span> Animation Timing System (t_ime slider)</h3>
+        <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem;">When the animation plays (via the g_o button), <span class="expr-inline">t_ime</span> loops 0&rarr;4. This triggers a cascade of trail-reveal opacity calculations. During animation, the contour chains are <em>not</em> recomputed (c and d are fixed), but the rendering cost of opacity updates for 50 trail points is moderate.</p>
+        <table class="expr-table">
+          <thead>
+            <tr><th>Expression</th><th>LaTeX</th><th>Purpose</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>t_ime</strong></td>
+              <td class="latex">t_ime = 0 (slider 0..4, LOOP_FORWARD)</td>
+              <td>Master animation clock</td>
+            </tr>
+            <tr>
+              <td><strong>i_sAnimating</strong></td>
+              <td class="latex">{0 &lt; t_ime : 1, 0}</td>
+              <td>Boolean: is animation running?</td>
+            </tr>
+            <tr>
+              <td><strong>A_trail</strong></td>
+              <td class="latex">animate(T_startTrail, t_durTrail, t_ime)</td>
+              <td>Per-point animation progress (list of 50)</td>
+            </tr>
+            <tr>
+              <td><strong>T_startTrail</strong></td>
+              <td class="latex">0.05 &middot; [0...n_max-1] + 0.3</td>
+              <td>Staggered start times for trail reveal</td>
+            </tr>
+            <tr>
+              <td><strong>c_heckIfShow</strong></td>
+              <td class="latex">{A_trail &gt; 0, 0}</td>
+              <td>Per-point visibility boolean</td>
+            </tr>
+            <tr>
+              <td><strong>n_umShowing</strong></td>
+              <td class="latex">total(c_heckIfShow)</td>
+              <td>Count of visible trail points</td>
+            </tr>
+            <tr>
+              <td><strong>o_attentuate</strong></td>
+              <td class="latex">[1..n_umShowing] / (0.6 &middot; n_umShowing)</td>
+              <td>Opacity gradient for visible points</td>
+            </tr>
+            <tr>
+              <td><strong>O_pacityPoints</strong></td>
+              <td class="latex">join(o_attentuate, zeros)[n_max...1]</td>
+              <td>Final per-point opacity list</td>
+            </tr>
+            <tr>
+              <td><strong>a_nimEnd</strong></td>
+              <td class="latex">{n_umShowing = n_max : 1, 0}</td>
+              <td>Animation completion flag</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="card-contour2">
+      <div class="card-header" onclick="toggleCard('card-contour2')">
+        <h3><span class="badge info">Hidden</span> Contour #2 (Hidden but Computing)</h3>
+        <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <div class="callout orange">
+          <strong>Hidden folder still computes!</strong>
+          The "Draw contour from current position #2" folder is marked <code>hidden: true</code>, but Desmos still evaluates all expressions inside it. This means a second 50-step recursive contour chain is computed at load time using fixed point (c, d) = (-53, -7). While it doesn&rsquo;t recalculate on drag (c and d are independent of a and b), it adds to initial load time and memory.
+        </div>
+        <table class="expr-table">
+          <thead>
+            <tr><th>Expression</th><th>LaTeX</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>c, d</strong></td>
+              <td class="latex">c = -53, d = -7</td>
+              <td>Fixed point (not dragged)</td>
+            </tr>
+            <tr>
+              <td><strong>p_particleDrag2</strong></td>
+              <td class="latex">(c, d{i_sAnimating=0})</td>
+              <td>Second drag point (hidden)</td>
+            </tr>
+            <tr>
+              <td><strong>c_ontour2(n)</strong></td>
+              <td class="latex">p_next(c_ontour2(n-1))</td>
+              <td>50-deep recursion (same cost)</td>
+            </tr>
+            <tr>
+              <td><strong>P_trail2</strong></td>
+              <td class="latex">c_ontour2(n) for n=[1..n_max]</td>
+              <td>50 trail points (hidden render)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="card-viewport">
+      <div class="card-header" onclick="toggleCard('card-viewport')">
+        <h3><span class="badge low">Low</span> Viewport &amp; Sizing (Resize-dependent)</h3>
+        <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem;">These recalculate when the browser window is resized. Low impact since resizing is infrequent.</p>
+        <table class="expr-table">
+          <thead><tr><th>Expression</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><strong>w_view, h_view</strong></td><td>Viewport dimensions (x_max - x_min, y_max - y_min)</td></tr>
+            <tr><td><strong>s_view</strong></td><td>Scaling factor based on window width / 480</td></tr>
+            <tr><td><strong>r_atio</strong></td><td>Aspect ratio (height/width)</td></tr>
+            <tr><td><strong>s_text, s_line, s_point</strong></td><td>Responsive sizing functions for text, lines, points</td></tr>
+            <tr><td><strong>Bounding box images</strong></td><td>8 tiled copies for seamless viewport wrapping</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section: Computational Cost Breakdown -->
+  <section>
+    <h2><span class="section-icon">&#128202;</span> Estimated Computational Cost Breakdown (Per Drag Frame)</h2>
+    <p class="desc">Relative cost estimates of what happens each time the mouse moves while dragging the duck.</p>
+
+    <div class="card open" id="card-costs">
+      <div class="card-header" onclick="toggleCard('card-costs')">
+        <h3>Cost Distribution</h3>
+        <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <div style="margin-bottom:0.75rem">
+          <div style="display:flex;justify-content:space-between;font-size:0.85rem">
+            <span>Recursive contour (50 &times; p_next)</span>
+            <span style="font-family:var(--mono);color:var(--red)">~75%</span>
+          </div>
+          <div class="cost-bar">
+            <div class="cost-track"><div class="cost-fill" style="width:75%;background:var(--red)"></div></div>
+          </div>
+        </div>
+        <div style="margin-bottom:0.75rem">
+          <div style="display:flex;justify-content:space-between;font-size:0.85rem">
+            <span>Point-in-polygon checks (6 regions)</span>
+            <span style="font-family:var(--mono);color:var(--orange)">~10%</span>
+          </div>
+          <div class="cost-bar">
+            <div class="cost-track"><div class="cost-fill" style="width:10%;background:var(--orange)"></div></div>
+          </div>
+        </div>
+        <div style="margin-bottom:0.75rem">
+          <div style="display:flex;justify-content:space-between;font-size:0.85rem">
+            <span>Image positioning (7+ duck instances)</span>
+            <span style="font-family:var(--mono);color:var(--yellow)">~8%</span>
+          </div>
+          <div class="cost-bar">
+            <div class="cost-track"><div class="cost-fill" style="width:8%;background:var(--yellow)"></div></div>
+          </div>
+        </div>
+        <div style="margin-bottom:0.75rem">
+          <div style="display:flex;justify-content:space-between;font-size:0.85rem">
+            <span>Trail point rendering (50 styled points)</span>
+            <span style="font-family:var(--mono);color:var(--teal)">~5%</span>
+          </div>
+          <div class="cost-bar">
+            <div class="cost-track"><div class="cost-fill" style="width:5%;background:var(--teal)"></div></div>
+          </div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:0.85rem">
+            <span>UI state checks &amp; misc</span>
+            <span style="font-family:var(--mono);color:var(--green)">~2%</span>
+          </div>
+          <div class="cost-bar">
+            <div class="cost-track"><div class="cost-fill" style="width:2%;background:var(--green)"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section: Recommendations -->
+  <section>
+    <h2><span class="section-icon">&#128161;</span> Performance Recommendations</h2>
+    <div class="recommendations">
+      <div class="rec-item">
+        <div class="rec-num">1</div>
+        <div class="rec-body">
+          <h4>Reduce n_max (recursion depth)</h4>
+          <p>The single most impactful change. Reducing <span class="expr-inline">n_max</span> from 50 to 25 would halve the per-frame computation cost. The trail would be shorter but the drag interaction would be noticeably smoother. Consider whether 30&ndash;35 steps provide a good visual-to-performance tradeoff.</p>
+        </div>
+      </div>
+      <div class="rec-item">
+        <div class="rec-num">2</div>
+        <div class="rec-body">
+          <h4>Defer contour computation to drag-end</h4>
+          <p>Instead of recomputing the full 50-step contour on every mouse-move, use a CL (Computation Layer) action to capture (a, b) only on drag-end and compute the contour from the captured values. During the drag, only move the duck image without trail updates. The <span class="expr-inline">x_moveCaptured</span> / <span class="expr-inline">y_moveCaptured</span> variables already exist for this pattern but currently update live.</p>
+        </div>
+      </div>
+      <div class="rec-item">
+        <div class="rec-num">3</div>
+        <div class="rec-body">
+          <h4>Eliminate hidden Contour #2</h4>
+          <p>The entire "Draw contour from current position #2" folder is hidden but still computed. If it&rsquo;s not needed, removing it would save a full 50-step recursive chain from the initial computation budget and free memory.</p>
+        </div>
+      </div>
+      <div class="rec-item">
+        <div class="rec-num">4</div>
+        <div class="rec-body">
+          <h4>Consolidate point-in-polygon checks</h4>
+          <p>Instead of 6 separate <span class="expr-inline">isPointInPolygon</span> calls, use the existing <span class="expr-inline">getClosestContinent(p)</span> spatial lookup (which is cheap) to determine which single region to test, then run only one polygon check. This would reduce the polygon test cost by ~80%.</p>
+        </div>
+      </div>
+      <div class="rec-item">
+        <div class="rec-num">5</div>
+        <div class="rec-body">
+          <h4>Reduce duplicate duck image instances</h4>
+          <p>Currently 7+ duck images render simultaneously for wrapping and animation states. Consider conditionally showing only the relevant set (drag-mode vs animation-mode) and reducing wrap-around copies if the viewport doesn&rsquo;t extend near the &plusmn;180&deg; boundary.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section: Complete Expression Index -->
+  <section>
+    <h2><span class="section-icon">&#128220;</span> Complete Expression Index</h2>
+    <p class="desc">All non-trivial expressions in the graph, organized by folder. Expressions highlighted in <span style="color:var(--red)">red</span> are part of the drag-recalculation chain.</p>
+
+    <div class="card" id="card-all-expr">
+      <div class="card-header" onclick="toggleCard('card-all-expr')">
+        <h3>All Expressions (click to expand)</h3>
+        <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>
+      </div>
+      <div class="card-body" id="all-expr-body">
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Generated from graph state &mdash; <a href="https://www.desmos.com/calculator/yan9b6afw1" target="_blank" style="color:var(--accent)">Open in Desmos</a>
+  </footer>
+</div>
+
+<script>
+function toggleCard(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+const dragDeps = new Set([
+  'a', 'b', 'p_{particleDrag1}', 'p_{particle1}', 'p_{carryover1}',
+  'x_{carryover1}', 'y_{carryover1}', 'x_{moveCaptured}', 'y_{moveCaptured}',
+  'c_{ontour1}', 'P_{trail1}', 'p_{duck}', 'l_{atitude}', 's_{ignLat}',
+  'P', 'b_{a}', 'b_{b}', 'b_{c}', 'b_{d}', 'b_{e}', 'b_{f}',
+  'i_{sInContinent}', 'i_{sUnderButton}', 'i_{sTrackerInToolbar}',
+  's_{howInitialArrow}'
+]);
+
+function isDragDep(latex) {
+  if (!latex) return false;
+  for (const d of dragDeps) {
+    if (latex.startsWith(d + '=') || latex.startsWith(d + '\\') || latex.startsWith(d + '(') || latex.startsWith(d + ' ')) return true;
+  }
+  const lhs = latex.split('=')[0];
+  if (lhs && dragDeps.has(lhs.trim())) return true;
+  return false;
+}
+
+fetch('graph-state.json')
+  .then(r => r.json())
+  .then(state => {
+    const folders = {};
+    const orphans = [];
+
+    for (const item of state.expressions.list) {
+      if (item.type === 'folder') {
+        folders[item.id] = { title: item.title, hidden: item.hidden, items: [] };
+      }
+    }
+
+    for (const item of state.expressions.list) {
+      if (item.type === 'expression' && item.latex) {
+        const entry = { id: item.id, latex: item.latex, hidden: item.hidden };
+        if (item.folderId && folders[item.folderId]) {
+          folders[item.folderId].items.push(entry);
+        } else if (!item.folderId) {
+          orphans.push(entry);
+        }
+      }
+    }
+
+    let html = '';
+
+    if (orphans.length) {
+      html += '<div style="margin-bottom:1rem"><strong style="font-size:0.85rem;color:var(--text-muted)">Top-level expressions</strong>';
+      html += '<table class="expr-table"><thead><tr><th>ID</th><th>LaTeX</th></tr></thead><tbody>';
+      for (const e of orphans) {
+        const highlight = isDragDep(e.latex) ? 'color:var(--red)' : '';
+        html += `<tr><td>${e.id}</td><td class="latex" style="${highlight}">${escHtml(truncate(e.latex, 120))}</td></tr>`;
+      }
+      html += '</tbody></table></div>';
+    }
+
+    for (const [fid, f] of Object.entries(folders)) {
+      if (!f.items.length) continue;
+      const hiddenTag = f.hidden ? ' <span style="font-size:0.7rem;opacity:0.5">(hidden)</span>' : '';
+      html += `<div style="margin-bottom:1rem"><strong style="font-size:0.85rem;color:var(--text-muted)">${escHtml(f.title)}${hiddenTag}</strong>`;
+      html += '<table class="expr-table"><thead><tr><th>ID</th><th>LaTeX</th></tr></thead><tbody>';
+      for (const e of f.items) {
+        const highlight = isDragDep(e.latex) ? 'color:var(--red)' : '';
+        html += `<tr><td>${e.id}</td><td class="latex" style="${highlight}">${escHtml(truncate(e.latex, 120))}</td></tr>`;
+      }
+      html += '</tbody></table></div>';
+    }
+
+    document.getElementById('all-expr-body').innerHTML = html;
+  })
+  .catch(() => {
+    document.getElementById('all-expr-body').innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;">Could not load graph-state.json. Make sure it is in the same directory as this HTML file.</p>';
+  });
+
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function truncate(s, n) {
+  return s.length > n ? s.slice(0, n) + '...' : s;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Performance Diagnosis — mmgixfobiw</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-hover: #222632;
+      --border: #2a2e3d;
+      --text: #e4e6ed;
+      --text-muted: #8b8fa3;
+      --accent: #6c7ee1;
+      --accent-glow: rgba(108, 126, 225, 0.15);
+      --red: #e85d6f;
+      --red-glow: rgba(232, 93, 111, 0.12);
+      --orange: #e8a04f;
+      --orange-glow: rgba(232, 160, 79, 0.12);
+      --yellow: #e8d44f;
+      --yellow-glow: rgba(232, 212, 79, 0.10);
+      --green: #4fbe7f;
+      --green-glow: rgba(79, 190, 127, 0.10);
+      --teal: #4fb8c4;
+      --teal-glow: rgba(79, 184, 196, 0.10);
+      --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    header { text-align: center; padding: 3rem 0 2rem; }
+    header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    header .subtitle { color: var(--text-muted); font-size: 0.95rem; }
+
+    .severity-banner { display: flex; align-items: center; gap: 0.75rem; padding: 1rem 1.25rem; border-radius: 10px; margin-bottom: 2rem; border: 1px solid; }
+    .severity-banner.critical { background: var(--red-glow); border-color: rgba(232, 93, 111, 0.25); }
+    .severity-banner .icon { font-size: 1.4rem; }
+    .severity-banner .label { font-weight: 600; font-size: 0.95rem; }
+    .severity-banner .label .tag { display: inline-block; padding: 0.1em 0.5em; border-radius: 4px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 0.5rem; }
+    .severity-banner.critical .tag { background: var(--red); color: var(--bg); }
+
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2.5rem; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; text-align: center; }
+    .stat-card .value { font-size: 2rem; font-weight: 700; font-family: var(--mono); line-height: 1.2; }
+    .stat-card .label { color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.25rem; }
+    .stat-card.red .value { color: var(--red); }
+    .stat-card.accent .value { color: var(--accent); }
+    .stat-card.teal .value { color: var(--teal); }
+
+    section { margin-bottom: 2.5rem; }
+    section h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+    section h2 .section-icon { font-size: 1.2rem; }
+    section > p, section > .desc { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; }
+
+    .callout { padding: 1rem 1.25rem; border-radius: 8px; border-left: 3px solid; margin: 1rem 0; font-size: 0.88rem; }
+    .callout.red { background: var(--red-glow); border-color: var(--red); }
+    .callout.orange { background: var(--orange-glow); border-color: var(--orange); }
+    .callout.accent { background: var(--accent-glow); border-color: var(--accent); }
+    .callout.green { background: var(--green-glow); border-color: var(--green); }
+    .callout strong { display: block; margin-bottom: 0.25rem; }
+
+    .expr-inline { font-family: var(--mono); font-size: 0.82em; background: rgba(108, 126, 225, 0.12); padding: 0.1em 0.35em; border-radius: 3px; color: var(--accent); }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .card + .card { margin-top: 1rem; }
+    .card-header { padding: 1rem 1.25rem; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; transition: background 0.15s; }
+    .card-header:hover { background: var(--surface-hover); }
+    .card-header h3 { font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .badge { display: inline-block; padding: 0.15em 0.55em; border-radius: 5px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .badge.critical { background: var(--red); color: var(--bg); }
+    .badge.high { background: var(--orange); color: var(--bg); }
+    .badge.medium { background: var(--yellow); color: var(--bg); }
+    .badge.low { background: var(--green); color: var(--bg); }
+
+    .chevron { transition: transform 0.2s; color: var(--text-muted); }
+    .card.open .chevron { transform: rotate(180deg); }
+    .card-body { display: none; padding: 0 1.25rem 1.25rem; }
+    .card.open .card-body { display: block; }
+
+    .expr-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .expr-table th { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .expr-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid rgba(42, 46, 61, 0.5); vertical-align: top; }
+    .expr-table tr:last-child td { border-bottom: none; }
+    .expr-table .latex { font-family: var(--mono); font-size: 0.8rem; color: var(--accent); word-break: break-all; }
+    .expr-table .folder-tag { font-size: 0.7rem; padding: 0.1em 0.4em; border-radius: 3px; background: rgba(108, 126, 225, 0.12); color: var(--accent); white-space: nowrap; }
+    .expr-table .detail { font-size: 0.8rem; color: var(--text-muted); }
+
+    .recommendations { display: flex; flex-direction: column; gap: 0.75rem; }
+    .rec-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.25rem; display: flex; gap: 1rem; align-items: flex-start; }
+    .rec-num { background: var(--accent); color: var(--bg); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; flex-shrink: 0; }
+    .rec-body h4 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .rec-body p { font-size: 0.85rem; color: var(--text-muted); }
+
+    footer { text-align: center; padding: 2rem 0; color: var(--text-muted); font-size: 0.8rem; border-top: 1px solid var(--border); }
+
+    @media (max-width: 640px) {
+      header h1 { font-size: 1.5rem; }
+      .summary-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <a href="index.html" style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.82rem;color:var(--text-muted);text-decoration:none;margin-bottom:0.5rem;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">&larr; Home</a>
+
+  <header>
+    <h1>Desmos Graph Performance Diagnosis</h1>
+    <p class="subtitle">Manual analysis of <a href="https://www.desmos.com/calculator/mmgixfobiw" target="_blank">mmgixfobiw</a></p>
+  </header>
+
+  <!-- Severity Banner -->
+  <div class="severity-banner critical">
+    <span class="icon">&#9888;&#65039;</span>
+    <span class="label">
+      <span class="tag">Performance Issues Identified</span>
+      This test graph contains 4 distinct categories of intentional slowdowns.
+    </span>
+  </div>
+
+  <!-- Summary Stats -->
+  <div class="summary-grid">
+    <div class="stat-card accent">
+      <div class="value">1035</div>
+      <div class="label">Total Expressions</div>
+    </div>
+    <div class="stat-card red">
+      <div class="value">4</div>
+      <div class="label">Slowdown Categories</div>
+    </div>
+    <div class="stat-card teal">
+      <div class="value">6</div>
+      <div class="label">Folders</div>
+    </div>
+    <div class="stat-card teal">
+      <div class="value">2</div>
+      <div class="label">Sliders</div>
+    </div>
+  </div>
+
+  <!-- Analysis Summary -->
+  <section>
+    <h2><span class="section-icon">&#128270;</span> Analysis Summary</h2>
+
+    <div class="callout accent">
+      <strong>Graph Overview</strong>
+      This graph is a performance test containing <strong style="display:inline">1,035 expressions</strong> across <strong style="display:inline">6 folders</strong>. It intentionally demonstrates 4 distinct categories of Desmos performance bottlenecks: heavy computation, plotting overload, implicit curve multiplication, and expression count overhead. It also includes a &ldquo;Red Herring&rdquo; folder with a long list comprehension that looks expensive but has minimal impact.
+    </div>
+
+    <div class="callout red">
+      <strong>Slowdown 1: Heavy Computation</strong>
+      The expression <span class="expr-inline">f_hard(a) = sum(n=1 to 10^k, integral(0 to n, sin(t&minus;a)dt))</span> combines a summation with a nested definite integral. When <span class="expr-inline">k=4</span>, this evaluates 10,000 integrals per frame. The function is called as <span class="expr-inline">f_hard(v+A.x)</span>, making it dependent on both the slider <span class="expr-inline">v</span> and the movable point <span class="expr-inline">A</span>. This is by far the most computationally expensive single expression in the graph.
+    </div>
+
+    <div class="callout orange">
+      <strong>Slowdown 2: Plotting Overload</strong>
+      The parametric expression <span class="expr-inline">(cos(t), sin(t)) &middot; repeat(1, 1000)</span> creates 1,000 overlapping unit circles. Each one requires independent GPU rendering of the parametric curve over the domain <span class="expr-inline">[0, 100]</span>. This stress-tests Desmos&rsquo;s rendering pipeline rather than its expression evaluator.
+    </div>
+
+    <div class="callout orange">
+      <strong>Slowdown 2b: Implicit Curve Multiplication</strong>
+      The expression <span class="expr-inline">y = [-8,-7.8...8] + cos(x)</span> generates 81 separate implicit curves (one for each value in the list range). Combined with <span class="expr-inline">y = sin(x) + x</span>, Desmos must find all intersection points between 81 curves and the sine function, creating massive rendering and root-finding load.
+    </div>
+
+    <div class="callout accent">
+      <strong>Slowdown 3: Expression Count Overhead</strong>
+      1,024 trivial expressions (<span class="expr-inline">1&middot;1</span>, <span class="expr-inline">2&middot;1</span>, &hellip; <span class="expr-inline">32&middot;32</span>) are placed in a hidden folder. Even though each expression is trivially cheap (cost: 1.0), Desmos still parses, evaluates, and manages them all. The sheer volume creates overhead in the expression management system.
+    </div>
+
+    <div class="callout green">
+      <strong>&#9873; Red Herring: Very Long List</strong>
+      The list comprehension <span class="expr-inline">[A.x + v + xy for x=[0&hellip;32], y=[0&hellip;32]]</span> references the movable point <span class="expr-inline">A</span> and slider <span class="expr-inline">v</span>, so it does recalculate on input changes. However, as a single list comprehension generating 1,024 values, it&rsquo;s far cheaper than 1,024 separate expressions. Estimated cost: ~9.3 vs 1,024.0.
+    </div>
+  </section>
+
+  <!-- Performance Issues by Impact -->
+  <section>
+    <h2><span class="section-icon">&#9889;</span> Performance Issues by Impact</h2>
+    <p class="desc">Expressions grouped by their estimated computational cost. Click to expand each group.</p>
+
+    <!-- Critical Impact -->
+    <div class="card open" id="card-crit">
+      <div class="card-header" onclick="toggleCard('card-crit')">
+        <h3>
+          <span class="badge critical">Critical</span>
+          Critical Impact &mdash; 1 expression &middot;
+          <span style="font-family:var(--mono);font-weight:600;font-size:0.82rem">~7.3</span> total cost
+        </h3>
+        <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem">This expression has the highest per-frame cost. The nested summation+integral combination creates extreme computational load that scales with the upper bound parameter.</p>
+        <table class="expr-table">
+          <thead><tr><th>Expression</th><th>LaTeX</th><th>Folder</th><th>Est. Cost</th><th>Breakdown</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>f_{hard}(a)</strong></td>
+              <td class="latex">f_{hard}\left(a\right)=\sum_{n=1}^{10^{k}}\int_{0}^{n}\sin\left(t-a\right)dt</td>
+              <td><span class="folder-tag">Slowdown 1: Heavy Comp</span></td>
+              <td style="font-family:var(--mono);font-size:0.8rem;color:var(--red);white-space:nowrap">~7.3</td>
+              <td class="detail">sum detected (+6), integral NOT currently detected by analyzer, length ~91 chars (+0.27)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- High Impact -->
+    <div class="card" id="card-high">
+      <div class="card-header" onclick="toggleCard('card-high')">
+        <h3>
+          <span class="badge high">High</span>
+          High Impact &mdash; 1 expression &middot;
+          <span style="font-family:var(--mono);font-weight:600;font-size:0.82rem">~9.3</span> total cost
+        </h3>
+        <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem">This expression uses a list comprehension with external dependencies, making it recalculate whenever inputs change.</p>
+        <table class="expr-table">
+          <thead><tr><th>Expression</th><th>LaTeX</th><th>Folder</th><th>Est. Cost</th><th>Breakdown</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>List comprehension</strong></td>
+              <td class="latex">[A.x + v + xy \operatorname{for} x=[0...32], y=[0...32]]</td>
+              <td><span class="folder-tag">Red Herring</span></td>
+              <td style="font-family:var(--mono);font-size:0.8rem;color:var(--orange);white-space:nowrap">~9.3</td>
+              <td class="detail">for loop (+8), length ~84 chars (+0.25)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Medium Impact -->
+    <div class="card" id="card-med">
+      <div class="card-header" onclick="toggleCard('card-med')">
+        <h3>
+          <span class="badge medium">Medium</span>
+          Medium Impact &mdash; 1 expression &middot;
+          <span style="font-family:var(--mono);font-weight:600;font-size:0.82rem">~3.3</span> total cost
+        </h3>
+        <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem">This expression creates heavy GPU rendering load through parametric curve repetition.</p>
+        <table class="expr-table">
+          <thead><tr><th>Expression</th><th>LaTeX</th><th>Folder</th><th>Est. Cost</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Parametric repeat</strong></td>
+              <td class="latex">(cos(t), sin(t)) \cdot \operatorname{repeat}(1, 1000)</td>
+              <td><span class="folder-tag">Slowdown 2: Plot Overload</span></td>
+              <td style="font-family:var(--mono);font-size:0.8rem;color:var(--yellow);white-space:nowrap">~3.3</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Low Impact -->
+    <div class="card" id="card-low">
+      <div class="card-header" onclick="toggleCard('card-low')">
+        <h3>
+          <span class="badge low">Low</span>
+          Low Impact &mdash; 1,032 expressions &middot;
+          <span style="font-family:var(--mono);font-weight:600;font-size:0.82rem">~1032.0</span> total cost
+        </h3>
+        <svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>
+      </div>
+      <div class="card-body">
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem">The remaining expressions are individually cheap but contribute cumulative overhead through sheer volume.</p>
+        <table class="expr-table">
+          <thead><tr><th>Category</th><th>Count</th><th>Folder</th><th>Per-expr Cost</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Trivial products</strong></td>
+              <td>1,024</td>
+              <td><span class="folder-tag">Slowdown 3: Expr Count</span></td>
+              <td style="font-family:var(--mono);font-size:0.8rem;color:var(--text-muted)">~1.0</td>
+            </tr>
+            <tr>
+              <td><strong>Sliders</strong></td>
+              <td>2</td>
+              <td>&mdash;</td>
+              <td style="font-family:var(--mono);font-size:0.8rem;color:var(--text-muted)">~1.0</td>
+            </tr>
+            <tr>
+              <td><strong>Movable point A</strong></td>
+              <td>1</td>
+              <td>&mdash;</td>
+              <td style="font-family:var(--mono);font-size:0.8rem;color:var(--text-muted)">~1.0</td>
+            </tr>
+            <tr>
+              <td><strong>Action expression</strong></td>
+              <td>1</td>
+              <td>&mdash;</td>
+              <td style="font-family:var(--mono);font-size:0.8rem;color:var(--text-muted)">~1.0</td>
+            </tr>
+            <tr>
+              <td><strong>Implicit curves</strong></td>
+              <td>2</td>
+              <td><span class="folder-tag">Slowdown 2b: Implicit</span></td>
+              <td style="font-family:var(--mono);font-size:0.8rem;color:var(--text-muted)">~1.0</td>
+            </tr>
+            <tr>
+              <td><strong>f_hard call + other</strong></td>
+              <td>2</td>
+              <td><span class="folder-tag">Slowdown 1</span></td>
+              <td style="font-family:var(--mono);font-size:0.8rem;color:var(--text-muted)">~1.0</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Recommendations -->
+  <section>
+    <h2><span class="section-icon">&#128161;</span> Performance Recommendations</h2>
+    <div class="recommendations">
+      <div class="rec-item">
+        <div class="rec-num">1</div>
+        <div class="rec-body">
+          <h4>Reduce summation upper bound</h4>
+          <p><span class="expr-inline">f_hard</span> sums to <span class="expr-inline">10^k</span>. When <span class="expr-inline">k=4</span>, that&rsquo;s 10,000 nested integrals. Reducing <span class="expr-inline">k</span> to 2 (100 terms) makes the graph responsive. Consider whether the full resolution is needed, or compute it lazily via an action.</p>
+        </div>
+      </div>
+      <div class="rec-item">
+        <div class="rec-num">2</div>
+        <div class="rec-body">
+          <h4>Reduce plot repetition count</h4>
+          <p><span class="expr-inline">repeat(1, 1000)</span> creates 1,000 overlapping curves. Reduce the repeat count to the minimum needed for the visual effect.</p>
+        </div>
+      </div>
+      <div class="rec-item">
+        <div class="rec-num">3</div>
+        <div class="rec-body">
+          <h4>Consolidate implicit curve families</h4>
+          <p>81 implicit curves from a single list range overwhelm the root-finder. Consider plotting fewer representative curves or using a parametric approach.</p>
+        </div>
+      </div>
+      <div class="rec-item">
+        <div class="rec-num">4</div>
+        <div class="rec-body">
+          <h4>Remove unused expression bulk</h4>
+          <p>1,024 trivial expressions in a hidden folder add overhead even though they&rsquo;re individually cheap. Delete any expressions that don&rsquo;t contribute to the graph output.</p>
+        </div>
+      </div>
+      <div class="rec-item">
+        <div class="rec-num">5</div>
+        <div class="rec-body">
+          <h4>Hidden folders still compute</h4>
+          <p>The graph has 3 hidden folders containing expressions that Desmos still evaluates. If these are disabled for testing, delete them entirely to reclaim processing.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Auto-generated by Desmos Graph Analyzer</footer>
+</div>
+
+<script>
+function toggleCard(id) { document.getElementById(id).classList.toggle('open'); }
+</script>
+</body>
+</html>
