@@ -20,15 +20,16 @@
   --accent2: #5c6ce0;
   --accent-bg: rgba(123,140,255,0.08);
   --red: #ff6b7a;
-  --red-bg: rgba(255,107,122,0.08);
+  --red-bg: rgba(255,107,122,0.06);
+  --red-bg2: rgba(255,107,122,0.12);
   --orange: #ffaa5c;
-  --orange-bg: rgba(255,170,92,0.08);
+  --orange-bg: rgba(255,170,92,0.06);
+  --orange-bg2: rgba(255,170,92,0.12);
   --yellow: #ffd75c;
-  --yellow-bg: rgba(255,215,92,0.06);
   --green: #5cdb8b;
-  --green-bg: rgba(92,219,139,0.08);
+  --green-bg: rgba(92,219,139,0.06);
+  --green-bg2: rgba(92,219,139,0.12);
   --teal: #5cc8d4;
-  --teal-bg: rgba(92,200,212,0.08);
   --mono: 'SF Mono','Cascadia Code','Fira Code','JetBrains Mono','Consolas',monospace;
   --sans: 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --radius: 10px;
@@ -36,7 +37,7 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:var(--sans);background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh}
-.container{max-width:1200px;margin:0 auto;padding:1.5rem}
+.container{max-width:1400px;margin:0 auto;padding:1.5rem}
 
 .header{text-align:center;padding:2.5rem 0 2rem}
 .header h1{font-size:1.75rem;font-weight:700;letter-spacing:-.03em}
@@ -75,15 +76,15 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);line-height:
 
 #results{display:none}
 #results.show{display:block}
-.results-header{text-align:center;margin-bottom:2rem;padding-top:1rem;border-top:1px solid var(--border)}
+.results-header{text-align:center;margin-bottom:1.5rem;padding-top:1rem;border-top:1px solid var(--border)}
 .results-header h2{font-size:1.35rem;font-weight:700}
 .reset-link{display:inline-flex;align-items:center;gap:.35rem;font-size:.85rem;color:var(--accent);text-decoration:none;margin-bottom:1.25rem}
 .reset-link:hover{text-decoration:underline}
 
-.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:2rem}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;text-align:center}
-.stat-card .value{font-family:var(--mono);font-size:1.6rem;font-weight:700}
-.stat-card .label{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-top:.2rem}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.75rem;margin-bottom:1.5rem}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem;text-align:center}
+.stat-card .value{font-family:var(--mono);font-size:1.5rem;font-weight:700}
+.stat-card .label{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-top:.15rem}
 .stat-card.green .value{color:var(--green)}
 .stat-card.red .value{color:var(--red)}
 .stat-card.orange .value{color:var(--orange)}
@@ -91,52 +92,70 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);line-height:
 .stat-card.teal .value{color:var(--teal)}
 .stat-card.text3 .value{color:var(--text3)}
 
-.diff-section{margin-bottom:2rem}
-.diff-section h3{font-size:1.05rem;font-weight:700;margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem}
-.diff-section h3 .ico{font-size:1rem}
-.diff-section .desc{font-size:.82rem;color:var(--text2);margin-bottom:1rem}
+/* Filter tabs */
+.filter-bar{display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap}
+.filter-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:.4rem .85rem;font-size:.78rem;font-family:var(--sans);color:var(--text2);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:.35rem}
+.filter-btn:hover{border-color:var(--accent);color:var(--text)}
+.filter-btn.active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent);font-weight:600}
+.filter-btn .cnt{font-family:var(--mono);font-size:.72rem;opacity:.7}
+.filter-btn .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot-added{background:var(--green)}
+.dot-removed{background:var(--red)}
+.dot-modified{background:var(--orange)}
+.dot-unchanged{background:var(--text3)}
+.dot-all{background:var(--accent)}
 
-.diff-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:.6rem}
-.diff-card-header{padding:.6rem 1rem;background:var(--surface2);display:flex;align-items:center;gap:.5rem;cursor:pointer;user-select:none}
-.diff-card-header .name{font-weight:600;font-size:.88rem;flex:1}
-.diff-card-header .badge{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:.15em .5em;border-radius:3px;white-space:nowrap}
-.badge-added{background:var(--green);color:var(--bg)}
-.badge-removed{background:var(--red);color:#fff}
-.badge-modified{background:var(--orange);color:var(--bg)}
-.badge-unchanged{background:var(--surface3);color:var(--text3)}
-.badge-folder{background:var(--accent-bg);color:var(--accent);font-size:.6rem}
-.chevron{transition:transform .2s;color:var(--text3);margin-left:auto;flex-shrink:0}
-.diff-card.open .chevron{transform:rotate(180deg)}
-.diff-card-body{display:none;padding:1rem}
-.diff-card.open .diff-card-body{display:block}
+/* Side-by-side diff */
+.diff-table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.diff-col-head{display:grid;grid-template-columns:36px 1fr 1fr;background:var(--surface2);border-bottom:1px solid var(--border);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.diff-col-head .gutter-head{padding:.6rem .4rem;color:var(--text3);text-align:center}
+.diff-col-head .side-head{padding:.6rem .85rem}
+.diff-col-head .side-a{color:var(--accent)}
+.diff-col-head .side-b{color:var(--teal);border-left:1px solid var(--border)}
 
-.diff-side{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
-@media(max-width:640px){.diff-side{grid-template-columns:1fr}}
-.diff-pane{border-radius:var(--radius-sm);padding:.75rem;overflow-x:auto;min-height:2.5rem}
-.diff-pane.pane-a{background:rgba(255,107,122,0.05);border:1px solid rgba(255,107,122,0.15)}
-.diff-pane.pane-b{background:rgba(92,219,139,0.05);border:1px solid rgba(92,219,139,0.15)}
-.diff-pane.pane-single-add{background:rgba(92,219,139,0.05);border:1px solid rgba(92,219,139,0.15)}
-.diff-pane.pane-single-rm{background:rgba(255,107,122,0.05);border:1px solid rgba(255,107,122,0.15)}
-.diff-pane-label{font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem;font-weight:600}
-.diff-pane.pane-a .diff-pane-label{color:var(--red)}
-.diff-pane.pane-b .diff-pane-label{color:var(--green)}
-.diff-pane.pane-single-add .diff-pane-label{color:var(--green)}
-.diff-pane.pane-single-rm .diff-pane-label{color:var(--red)}
-.diff-pane .latex-render{color:var(--text);font-size:.85rem}
+.diff-row{display:grid;grid-template-columns:36px 1fr 1fr;border-bottom:1px solid rgba(42,47,66,.3);min-height:2.5rem;transition:opacity .15s}
+.diff-row:last-child{border-bottom:none}
+.diff-row.hidden-row{display:none}
 
-.folder-diff{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:2rem}
-.folder-diff table{width:100%;border-collapse:collapse}
-.folder-diff th{background:var(--surface2);text-align:left;padding:.55rem .85rem;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;border-bottom:1px solid var(--border)}
-.folder-diff td{padding:.5rem .85rem;border-bottom:1px solid rgba(42,47,66,.3);font-size:.84rem}
-.folder-diff tr:last-child td{border-bottom:none}
-.folder-diff .added-row{background:rgba(92,219,139,0.04)}
-.folder-diff .removed-row{background:rgba(255,107,122,0.04)}
+.diff-gutter{display:flex;align-items:flex-start;justify-content:center;padding:.5rem .2rem;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;user-select:none}
+.diff-gutter .gutter-badge{writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);padding:.2rem 0}
 
-.katex{font-size:.92em;color:inherit}
+.diff-cell{padding:.55rem .85rem;overflow-x:auto;overflow-y:hidden;min-width:0}
+.diff-cell.side-b{border-left:1px solid rgba(42,47,66,.3)}
+.diff-cell .cell-name{font-size:.72rem;font-weight:600;margin-bottom:.25rem;display:flex;align-items:center;gap:.35rem;flex-wrap:wrap}
+.diff-cell .cell-name .folder-tag{font-size:.6rem;color:var(--text3);background:var(--surface3);padding:.1em .4em;border-radius:3px}
+.diff-cell .cell-latex{overflow-x:auto;max-height:5rem;overflow-y:auto}
+.diff-cell .cell-empty{color:var(--text3);font-style:italic;font-size:.8rem;opacity:.5}
+.diff-cell .prop-changes{font-size:.75rem;margin-top:.35rem;padding-top:.35rem;border-top:1px dashed rgba(42,47,66,.4)}
+.diff-cell .prop-changes code{color:var(--accent);font-size:.72rem}
+
+.row-added .diff-gutter{background:var(--green-bg2);color:var(--green)}
+.row-added .side-a{background:transparent}
+.row-added .side-b{background:var(--green-bg)}
+
+.row-removed .diff-gutter{background:var(--red-bg2);color:var(--red)}
+.row-removed .side-a{background:var(--red-bg)}
+.row-removed .side-b{background:transparent}
+
+.row-modified .diff-gutter{background:var(--orange-bg2);color:var(--orange)}
+.row-modified .side-a{background:var(--orange-bg)}
+.row-modified .side-b{background:var(--orange-bg)}
+
+.row-unchanged .diff-gutter{color:var(--text3)}
+.row-unchanged .side-a,.row-unchanged .side-b{opacity:.6}
+.row-unchanged:hover .side-a,.row-unchanged:hover .side-b{opacity:1}
+
+/* Folder separator */
+.folder-sep{display:grid;grid-template-columns:36px 1fr 1fr;background:var(--surface2);border-bottom:1px solid var(--border)}
+.folder-sep .fs-gutter{padding:.3rem .4rem}
+.folder-sep .fs-label{padding:.3rem .85rem;font-size:.72rem;font-weight:600;color:var(--text3);display:flex;align-items:center;gap:.35rem}
+.folder-sep .fs-label .folder-ico{font-size:.8rem}
+.folder-sep .side-b{border-left:1px solid var(--border)}
+
+.katex{font-size:.88em;color:inherit}
 .katex .mord,.katex .mbin,.katex .mrel,.katex .mopen,.katex .mclose,.katex .mpunct,.katex .mop,.katex .minner{color:inherit}
 .latex-render{overflow-x:auto;display:inline-block;max-width:100%}
 .latex-render .katex{white-space:normal}
-td .latex-render{display:block;max-height:4rem;overflow-y:auto}
 
 footer{text-align:center;padding:2rem 0 1rem;color:var(--text3);font-size:.75rem;border-top:1px solid var(--border)}
 footer a{color:var(--accent);text-decoration:none}
@@ -193,6 +212,7 @@ const $=id=>document.getElementById(id);
 const H=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 function latexEl(tex){
+  if(!tex)return'<span class="cell-empty">—</span>';
   const e=H(tex);
   return`<span class="latex-render" data-latex="${e}">${e}</span>`;
 }
@@ -212,8 +232,6 @@ function renderAllLatex(root){
   if(typeof katex!=='undefined')go();
   else setTimeout(()=>{if(typeof katex!=='undefined')go()},300);
 }
-
-const chevSvg='<svg class="chevron" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>';
 
 function togglePaste(id){$(('paste-'+id)).classList.toggle('show')}
 function showError(msg){const el=$('error-msg');el.textContent=msg;el.classList.add('show')}
@@ -284,7 +302,7 @@ function extractExprs(state){
     if(it.type==='folder'||it.type==='text')continue;
     if(it.type==='image'){
       exprs.push({id:it.id,type:'image',latex:'',name:null,folderId:it.folderId,hidden:!!it.hidden,
-        imageUrl:it.image_url||'',draggable:!!it.draggable,center:it.center,width:it.width,height:it.height});
+        imageUrl:it.image_url||'',draggable:!!it.draggable});
       continue;
     }
     if(it.type!=='expression'||!it.latex)continue;
@@ -293,7 +311,7 @@ function extractExprs(state){
       id:it.id,type:'expression',latex:it.latex,name,folderId:it.folderId,
       hidden:!!it.hidden,slider:!!it.slider,dragMode:it.dragMode||null,
       color:it.color,lineStyle:it.lineStyle,lineWidth:it.lineWidth,
-      fillOpacity:it.fillOpacity,domain:it.domain,
+      fillOpacity:it.fillOpacity,
     });
   }
   return{folders,exprs};
@@ -304,53 +322,70 @@ function diffGraphs(a,b){
   const namedA=new Map(),namedB=new Map();
   const unnamedA=[],unnamedB=[];
 
-  for(const e of a.exprs){
-    if(e.name)namedA.set(e.name,e);
-    else unnamedA.push(e);
-  }
-  for(const e of b.exprs){
-    if(e.name)namedB.set(e.name,e);
-    else unnamedB.push(e);
-  }
+  for(const e of a.exprs){if(e.name)namedA.set(e.name,e);else unnamedA.push(e)}
+  for(const e of b.exprs){if(e.name)namedB.set(e.name,e);else unnamedB.push(e)}
 
-  const added=[],removed=[],modified=[],unchanged=[];
+  const matched=new Map();
 
   for(const[name,ea]of namedA){
     const eb=namedB.get(name);
-    if(!eb){removed.push({name,a:ea,b:null});continue}
-    if(ea.latex===eb.latex){
-      const propDiffs=diffProps(ea,eb);
-      if(propDiffs.length>0)modified.push({name,a:ea,b:eb,propDiffs,latexChanged:false});
-      else unchanged.push({name,a:ea,b:eb});
-    }else{
-      modified.push({name,a:ea,b:eb,propDiffs:diffProps(ea,eb),latexChanged:true});
-    }
+    if(!eb){matched.set(ea.id+'A',{status:'removed',a:ea,b:null});continue}
+    const pd=diffProps(ea,eb);
+    if(ea.latex===eb.latex&&pd.length===0)matched.set(name,{status:'unchanged',a:ea,b:eb});
+    else matched.set(name,{status:'modified',a:ea,b:eb,propDiffs:pd,latexChanged:ea.latex!==eb.latex});
     namedB.delete(name);
   }
-  for(const[name,eb]of namedB){
-    added.push({name,a:null,b:eb});
-  }
+  for(const[name,eb]of namedB)matched.set(eb.id+'B',{status:'added',a:null,b:eb});
 
-  const matchedUnnamed=new Set();
+  const matchedUI=new Set();
   for(const ea of unnamedA){
-    const idx=unnamedB.findIndex((eb,i)=>!matchedUnnamed.has(i)&&eb.latex===ea.latex&&eb.type===ea.type);
+    const idx=unnamedB.findIndex((eb,i)=>!matchedUI.has(i)&&eb.latex===ea.latex&&eb.type===ea.type);
     if(idx>=0){
-      matchedUnnamed.add(idx);
-      const propDiffs=diffProps(ea,unnamedB[idx]);
-      if(propDiffs.length>0)modified.push({name:null,a:ea,b:unnamedB[idx],propDiffs,latexChanged:false});
-      else unchanged.push({name:null,a:ea,b:unnamedB[idx]});
+      matchedUI.add(idx);
+      const pd=diffProps(ea,unnamedB[idx]);
+      if(pd.length===0)matched.set('u'+ea.id+'A',{status:'unchanged',a:ea,b:unnamedB[idx]});
+      else matched.set('u'+ea.id+'A',{status:'modified',a:ea,b:unnamedB[idx],propDiffs:pd,latexChanged:false});
     }else{
-      removed.push({name:null,a:ea,b:null});
+      matched.set('u'+ea.id+'A',{status:'removed',a:ea,b:null});
     }
   }
   for(let i=0;i<unnamedB.length;i++){
-    if(!matchedUnnamed.has(i))added.push({name:null,a:null,b:unnamedB[i]});
+    if(!matchedUI.has(i))matched.set('u'+unnamedB[i].id+'B',{status:'added',a:null,b:unnamedB[i]});
   }
 
+  const rows=buildOrderedRows(a.exprs,b.exprs,matched);
   const folderDiff=diffFolders(a.folders,b.folders);
+  const counts={added:0,removed:0,modified:0,unchanged:0};
+  for(const r of rows)counts[r.status]++;
 
-  return{added,removed,modified,unchanged,folderDiff,
-    totalA:a.exprs.length,totalB:b.exprs.length};
+  return{rows,folderDiff,counts,totalA:a.exprs.length,totalB:b.exprs.length};
+}
+
+function buildOrderedRows(aExprs,bExprs,matched){
+  const rows=[];
+  const usedB=new Set();
+
+  for(const ea of aExprs){
+    let found=false;
+    for(const[,m]of matched){
+      if(m.a===ea){rows.push(m);if(m.b)usedB.add(m.b.id);found=true;break}
+    }
+    if(!found)rows.push({status:'removed',a:ea,b:null});
+  }
+  for(const eb of bExprs){
+    if(usedB.has(eb.id))continue;
+    let found=false;
+    for(const[,m]of matched){
+      if(m.b===eb&&!m.a){
+        const idx=rows.findIndex(r=>r.b&&r.b.folderId===eb.folderId&&rows.indexOf(r)>-1);
+        if(idx>=0)rows.splice(idx+1,0,m);
+        else rows.push(m);
+        found=true;break;
+      }
+    }
+    if(!found)rows.push({status:'added',a:null,b:eb});
+  }
+  return rows;
 }
 
 function diffProps(a,b){
@@ -364,28 +399,23 @@ function diffProps(a,b){
 }
 
 function diffFolders(fa,fb){
-  const added=[],removed=[],renamed=[],same=[];
+  const added=[],removed=[],renamed=[];
   const fbIds=new Set(Object.keys(fb));
   for(const[id,f]of Object.entries(fa)){
     if(!fb[id]){removed.push({id,title:f.title});continue}
     fbIds.delete(id);
     if(f.title!==fb[id].title)renamed.push({id,from:f.title,to:fb[id].title});
-    else same.push({id,title:f.title});
   }
   for(const id of fbIds)added.push({id,title:fb[id].title});
-  return{added,removed,renamed,same};
+  return{added,removed,renamed};
 }
 
 /* ── Render ── */
 function exprLabel(e){
+  if(!e)return'';
   if(e.name)return e.name;
-  if(e.type==='image')return '(image #'+e.id+')';
-  if(!e.latex)return '(empty #'+e.id+')';
-  return '(display #'+e.id+')';
-}
-
-function folderName(id,folders){
-  return folders[id]?folders[id].title:'';
+  if(e.type==='image')return'(image)';
+  return'(display)';
 }
 
 function renderResults(diff,fA,fB){
@@ -396,106 +426,117 @@ function renderResults(diff,fA,fB){
   html+=`<div class="results-header"><h2>Comparison Results</h2></div>`;
 
   const stats=[
-    {v:diff.totalA,l:'Graph A Expressions',c:'accent'},
-    {v:diff.totalB,l:'Graph B Expressions',c:'teal'},
-    {v:diff.added.length,l:'Added',c:diff.added.length>0?'green':'text3'},
-    {v:diff.removed.length,l:'Removed',c:diff.removed.length>0?'red':'text3'},
-    {v:diff.modified.length,l:'Modified',c:diff.modified.length>0?'orange':'text3'},
-    {v:diff.unchanged.length,l:'Unchanged',c:'text3'},
+    {v:diff.totalA,l:'Graph A',c:'accent'},
+    {v:diff.totalB,l:'Graph B',c:'teal'},
+    {v:diff.counts.added,l:'Added',c:diff.counts.added>0?'green':'text3'},
+    {v:diff.counts.removed,l:'Removed',c:diff.counts.removed>0?'red':'text3'},
+    {v:diff.counts.modified,l:'Modified',c:diff.counts.modified>0?'orange':'text3'},
+    {v:diff.counts.unchanged,l:'Unchanged',c:'text3'},
   ];
   html+=`<div class="summary-grid">${stats.map(s=>`<div class="stat-card ${s.c}"><div class="value">${s.v}</div><div class="label">${s.l}</div></div>`).join('')}</div>`;
 
   if(diff.folderDiff.added.length+diff.folderDiff.removed.length+diff.folderDiff.renamed.length>0){
-    html+=`<div class="diff-section"><h3><span class="ico">&#128193;</span> Folder Changes</h3>`;
-    html+=`<div class="folder-diff"><table><thead><tr><th>Change</th><th>Folder</th></tr></thead><tbody>`;
-    for(const f of diff.folderDiff.removed)html+=`<tr class="removed-row"><td><span class="badge badge-removed">Removed</span></td><td>${H(f.title||'(untitled)')}</td></tr>`;
-    for(const f of diff.folderDiff.added)html+=`<tr class="added-row"><td><span class="badge badge-added">Added</span></td><td>${H(f.title||'(untitled)')}</td></tr>`;
-    for(const f of diff.folderDiff.renamed)html+=`<tr><td><span class="badge badge-modified">Renamed</span></td><td>${H(f.from||'(untitled)')} &rarr; ${H(f.to||'(untitled)')}</td></tr>`;
-    html+=`</tbody></table></div></div>`;
-  }
-
-  if(diff.added.length>0){
-    html+=`<div class="diff-section"><h3><span class="ico">&#10010;</span> Added in Graph B (${diff.added.length})</h3>`;
-    html+=`<p class="desc">Expressions present in Graph B but not in Graph A.</p>`;
-    for(let i=0;i<diff.added.length;i++){
-      const d=diff.added[i],cid='add-'+i;
-      const folder=d.b.folderId?folderName(d.b.folderId,fB):'';
-      html+=`<div class="diff-card${i<5?' open':''}" id="${cid}"><div class="diff-card-header" onclick="document.getElementById('${cid}').classList.toggle('open')">`;
-      html+=`<span class="badge badge-added">Added</span>`;
-      html+=`<span class="name">${latexEl(exprLabel(d.b))}</span>`;
-      if(folder)html+=`<span class="badge badge-folder">${H(folder)}</span>`;
-      html+=chevSvg;
-      html+=`</div><div class="diff-card-body"><div class="diff-pane pane-single-add"><div class="diff-pane-label">Graph B</div>${latexEl(d.b.latex||'(no LaTeX)')}</div></div></div>`;
-    }
+    html+=`<div style="margin-bottom:1.25rem;font-size:.82rem;color:var(--text2)"><strong>Folder changes:</strong> `;
+    const parts=[];
+    if(diff.folderDiff.added.length>0)parts.push(`<span style="color:var(--green)">+${diff.folderDiff.added.length} added</span>`);
+    if(diff.folderDiff.removed.length>0)parts.push(`<span style="color:var(--red)">&minus;${diff.folderDiff.removed.length} removed</span>`);
+    if(diff.folderDiff.renamed.length>0)parts.push(`<span style="color:var(--orange)">${diff.folderDiff.renamed.length} renamed</span>`);
+    html+=parts.join(' &middot; ');
+    for(const f of diff.folderDiff.renamed)html+=`<div style="margin-top:.25rem;font-size:.78rem;color:var(--text3)">&nbsp;&nbsp;${H(f.from)} &rarr; ${H(f.to)}</div>`;
     html+=`</div>`;
   }
 
-  if(diff.removed.length>0){
-    html+=`<div class="diff-section"><h3><span class="ico">&#10006;</span> Removed from Graph A (${diff.removed.length})</h3>`;
-    html+=`<p class="desc">Expressions present in Graph A but not in Graph B.</p>`;
-    for(let i=0;i<diff.removed.length;i++){
-      const d=diff.removed[i],cid='rm-'+i;
-      const folder=d.a.folderId?folderName(d.a.folderId,fA):'';
-      html+=`<div class="diff-card${i<5?' open':''}" id="${cid}"><div class="diff-card-header" onclick="document.getElementById('${cid}').classList.toggle('open')">`;
-      html+=`<span class="badge badge-removed">Removed</span>`;
-      html+=`<span class="name">${latexEl(exprLabel(d.a))}</span>`;
-      if(folder)html+=`<span class="badge badge-folder">${H(folder)}</span>`;
-      html+=chevSvg;
-      html+=`</div><div class="diff-card-body"><div class="diff-pane pane-single-rm"><div class="diff-pane-label">Graph A</div>${latexEl(d.a.latex||'(no LaTeX)')}</div></div></div>`;
-    }
-    html+=`</div>`;
-  }
+  html+=`<div class="filter-bar" id="filter-bar">`;
+  html+=`<button class="filter-btn active" data-filter="all" onclick="setFilter('all')"><span class="dot dot-all"></span>All <span class="cnt">${diff.rows.length}</span></button>`;
+  html+=`<button class="filter-btn" data-filter="added" onclick="setFilter('added')"><span class="dot dot-added"></span>Added <span class="cnt">${diff.counts.added}</span></button>`;
+  html+=`<button class="filter-btn" data-filter="removed" onclick="setFilter('removed')"><span class="dot dot-removed"></span>Removed <span class="cnt">${diff.counts.removed}</span></button>`;
+  html+=`<button class="filter-btn" data-filter="modified" onclick="setFilter('modified')"><span class="dot dot-modified"></span>Modified <span class="cnt">${diff.counts.modified}</span></button>`;
+  html+=`<button class="filter-btn" data-filter="unchanged" onclick="setFilter('unchanged')"><span class="dot dot-unchanged"></span>Unchanged <span class="cnt">${diff.counts.unchanged}</span></button>`;
+  html+=`</div>`;
 
-  if(diff.modified.length>0){
-    html+=`<div class="diff-section"><h3><span class="ico">&#9998;</span> Modified (${diff.modified.length})</h3>`;
-    html+=`<p class="desc">Expressions present in both graphs but with different LaTeX or properties.</p>`;
-    for(let i=0;i<diff.modified.length;i++){
-      const d=diff.modified[i],cid='mod-'+i;
-      html+=`<div class="diff-card${i<10?' open':''}" id="${cid}"><div class="diff-card-header" onclick="document.getElementById('${cid}').classList.toggle('open')">`;
-      html+=`<span class="badge badge-modified">Modified</span>`;
-      html+=`<span class="name">${latexEl(exprLabel(d.a))}</span>`;
-      html+=chevSvg;
-      html+=`</div><div class="diff-card-body">`;
-      if(d.latexChanged){
-        html+=`<div class="diff-side"><div class="diff-pane pane-a"><div class="diff-pane-label">Graph A</div>${latexEl(d.a.latex)}</div>`;
-        html+=`<div class="diff-pane pane-b"><div class="diff-pane-label">Graph B</div>${latexEl(d.b.latex)}</div></div>`;
-      }
-      if(d.propDiffs.length>0){
-        html+=`<div style="margin-top:${d.latexChanged?'.75rem':'0'};font-size:.82rem">`;
-        html+=`<div style="color:var(--text2);margin-bottom:.35rem;font-weight:600">Property changes:</div>`;
-        for(const p of d.propDiffs){
-          const from=p.from===null?'<span style="color:var(--text3)">none</span>':`<span style="color:var(--red)">${H(String(p.from))}</span>`;
-          const to=p.to===null?'<span style="color:var(--text3)">none</span>':`<span style="color:var(--green)">${H(String(p.to))}</span>`;
-          html+=`<div style="padding:.2rem 0"><code style="color:var(--accent)">${H(p.prop)}</code>: ${from} &rarr; ${to}</div>`;
+  html+=`<div class="diff-col-head">`;
+  html+=`<div class="gutter-head"></div>`;
+  html+=`<div class="side-head side-a">Graph A</div>`;
+  html+=`<div class="side-head side-b">Graph B</div>`;
+  html+=`</div>`;
+
+  html+=`<div class="diff-table" id="diff-table">`;
+
+  let lastFolderA=null,lastFolderB=null;
+  for(let i=0;i<diff.rows.length;i++){
+    const r=diff.rows[i];
+    const fid=r.a?.folderId||r.b?.folderId||null;
+    const folderA=r.a?.folderId?fA[r.a.folderId]?.title||'':'';
+    const folderB=r.b?.folderId?fB[r.b.folderId]?.title||'':'';
+    const curFolder=folderA||folderB;
+    if(curFolder&&curFolder!==(lastFolderA||lastFolderB)){
+      const fA2=folderA||'—';const fB2=folderB||'—';
+      html+=`<div class="folder-sep diff-filter-row" data-status="${r.status}"><div class="fs-gutter"></div>`;
+      html+=`<div class="fs-label"><span class="folder-ico">&#128193;</span> ${H(fA2)}</div>`;
+      html+=`<div class="fs-label side-b"><span class="folder-ico">&#128193;</span> ${H(fB2)}</div></div>`;
+    }
+    lastFolderA=folderA;lastFolderB=folderB;
+
+    const gutterLabel=r.status==='added'?'+':r.status==='removed'?'&minus;':r.status==='modified'?'&Delta;':'=';
+    html+=`<div class="diff-row row-${r.status} diff-filter-row" data-status="${r.status}">`;
+    html+=`<div class="diff-gutter"><span class="gutter-badge">${gutterLabel}</span></div>`;
+
+    html+=`<div class="diff-cell side-a">`;
+    if(r.a){
+      const label=exprLabel(r.a);
+      if(label)html+=`<div class="cell-name">${latexEl(label)}${r.a.hidden?'<span style="font-size:.6rem;color:var(--text3);background:var(--surface3);padding:.1em .3em;border-radius:3px">hidden</span>':''}</div>`;
+      html+=`<div class="cell-latex">${latexEl(r.a.latex)}</div>`;
+      if(r.propDiffs?.length>0&&r.status==='modified'){
+        html+=`<div class="prop-changes">`;
+        for(const p of r.propDiffs){
+          const fv=p.from===null?'none':String(p.from);
+          html+=`<div><code>${H(p.prop)}</code>: <span style="color:var(--red)">${H(fv)}</span></div>`;
         }
         html+=`</div>`;
       }
-      html+=`</div></div>`;
+    }else{
+      html+=`<div class="cell-empty">—</div>`;
     }
+    html+=`</div>`;
+
+    html+=`<div class="diff-cell side-b">`;
+    if(r.b){
+      const label=exprLabel(r.b);
+      if(label)html+=`<div class="cell-name">${latexEl(label)}${r.b.hidden?'<span style="font-size:.6rem;color:var(--text3);background:var(--surface3);padding:.1em .3em;border-radius:3px">hidden</span>':''}</div>`;
+      html+=`<div class="cell-latex">${latexEl(r.b.latex)}</div>`;
+      if(r.propDiffs?.length>0&&r.status==='modified'){
+        html+=`<div class="prop-changes">`;
+        for(const p of r.propDiffs){
+          const tv=p.to===null?'none':String(p.to);
+          html+=`<div><code>${H(p.prop)}</code>: <span style="color:var(--green)">${H(tv)}</span></div>`;
+        }
+        html+=`</div>`;
+      }
+    }else{
+      html+=`<div class="cell-empty">—</div>`;
+    }
+    html+=`</div>`;
+
     html+=`</div>`;
   }
 
-  if(diff.unchanged.length>0){
-    html+=`<div class="diff-section"><h3><span class="ico">&#9989;</span> Unchanged (${diff.unchanged.length})</h3>`;
-    html+=`<p class="desc">Expressions identical in both graphs. Click to expand.</p>`;
-    for(let i=0;i<Math.min(diff.unchanged.length,50);i++){
-      const d=diff.unchanged[i],cid='unch-'+i;
-      html+=`<div class="diff-card" id="${cid}"><div class="diff-card-header" onclick="document.getElementById('${cid}').classList.toggle('open')">`;
-      html+=`<span class="badge badge-unchanged">Same</span>`;
-      html+=`<span class="name">${latexEl(exprLabel(d.a))}</span>`;
-      html+=chevSvg;
-      html+=`</div><div class="diff-card-body"><div class="diff-pane pane-b"><div class="diff-pane-label" style="color:var(--text3)">Both Graphs</div>${latexEl(d.a.latex||'(no LaTeX)')}</div></div></div>`;
-    }
-    if(diff.unchanged.length>50)html+=`<p style="text-align:center;color:var(--text3);font-size:.82rem;padding:.75rem">…and ${diff.unchanged.length-50} more unchanged expressions</p>`;
-    html+=`</div>`;
-  }
-
+  html+=`</div>`;
   html+=`<footer>Desmos Graph Code Comparator &mdash; <a href="focused-analysis.html">Focused Analysis</a> &middot; <a href="analysis2.html">Graph Analyzer v2</a></footer>`;
 
   el.innerHTML=html;
   el.classList.add('show');
   el.scrollIntoView({behavior:'smooth',block:'start'});
   setTimeout(()=>renderAllLatex(el),80);
+}
+
+function setFilter(status){
+  document.querySelectorAll('.filter-btn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.filter===status);
+  });
+  document.querySelectorAll('.diff-filter-row').forEach(row=>{
+    if(status==='all')row.classList.remove('hidden-row');
+    else row.classList.toggle('hidden-row',row.dataset.status!==status);
+  });
 }
 
 function resetForm(){
