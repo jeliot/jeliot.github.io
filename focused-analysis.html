@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Focused Graph Analysis</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-hover: #222632;
+      --border: #2a2e3d;
+      --text: #e4e6ed;
+      --text-muted: #8b8fa3;
+      --accent: #6c7ee1;
+      --accent-glow: rgba(108, 126, 225, 0.15);
+      --red: #e85d6f;
+      --red-glow: rgba(232, 93, 111, 0.12);
+      --orange: #e8a04f;
+      --orange-glow: rgba(232, 160, 79, 0.12);
+      --yellow: #e8d44f;
+      --yellow-glow: rgba(232, 212, 79, 0.10);
+      --green: #4fbe7f;
+      --green-glow: rgba(79, 190, 127, 0.10);
+      --teal: #4fb8c4;
+      --teal-glow: rgba(79, 184, 196, 0.10);
+      --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    header { text-align: center; padding: 3rem 0 2rem; }
+    header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    header .subtitle { color: var(--text-muted); font-size: 0.95rem; }
+    header .meta-link { display: inline-block; margin-top: 0.6rem; font-size: 0.82rem; color: var(--text-muted); }
+    header .meta-link a { color: var(--accent); }
+
+    .input-area { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
+    .input-row { display: flex; gap: 0.75rem; }
+    .input-row input { flex: 1; background: var(--surface-hover); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 0.82rem; padding: 0.65rem 0.85rem; outline: none; }
+    .input-row input:focus { border-color: var(--accent); }
+    .input-row input::placeholder { color: #555a6e; }
+    .btn { background: var(--accent); color: #fff; border: none; padding: 0.65rem 2rem; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background 0.15s, transform 0.1s; }
+    .btn:hover { background: #5a69d6; }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .paste-toggle { display: inline-flex; align-items: center; gap: 0.35rem; margin-top: 0.6rem; font-size: 0.78rem; color: #555a6e; cursor: pointer; background: none; border: none; transition: color 0.15s; }
+    .paste-toggle:hover { color: var(--text-muted); }
+    .paste-box { display: none; margin-top: 0.6rem; }
+    .paste-box.show { display: block; }
+    .paste-box textarea { width: 100%; height: 130px; background: var(--surface-hover); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 0.73rem; padding: 0.6rem; outline: none; resize: vertical; }
+    .paste-box textarea:focus { border-color: var(--accent); }
+    .paste-box .hint { font-size: 0.72rem; color: #555a6e; margin-top: 0.3rem; }
+    .paste-box .hint code { background: var(--surface-hover); padding: 0.1em 0.35em; border-radius: 3px; }
+    .err-msg { display: none; padding: 0.85rem 1rem; color: var(--red); font-size: 0.85rem; background: var(--red-glow); border-radius: 6px; margin-bottom: 1rem; }
+    .err-msg.show { display: block; }
+    .loading { display: none; text-align: center; padding: 2.5rem; color: var(--text-muted); font-size: 0.9rem; }
+    .loading.show { display: block; }
+    .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 0.75rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    section { margin-bottom: 2.5rem; }
+    section h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+    section h2 .section-icon { font-size: 1.2rem; }
+    section > p, section > .desc { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2.5rem; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; text-align: center; }
+    .stat-card .value { font-size: 2rem; font-weight: 700; font-family: var(--mono); line-height: 1.2; }
+    .stat-card .label { color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.25rem; }
+    .stat-card.red .value { color: var(--red); }
+    .stat-card.orange .value { color: var(--orange); }
+    .stat-card.accent .value { color: var(--accent); }
+    .stat-card.teal .value { color: var(--teal); }
+
+    .toc { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 2rem; }
+    .toc a { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.5rem 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 0.82rem; color: var(--text-muted); text-decoration: none; transition: border-color 0.15s, color 0.15s; }
+    .toc a:hover { border-color: var(--accent); color: var(--accent); }
+    .toc a .num { background: var(--accent-glow); color: var(--accent); width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
+
+    .callout { padding: 1rem 1.25rem; border-radius: 8px; border-left: 3px solid; margin: 1rem 0; font-size: 0.88rem; }
+    .callout.red { background: var(--red-glow); border-color: var(--red); }
+    .callout.orange { background: var(--orange-glow); border-color: var(--orange); }
+    .callout.accent { background: var(--accent-glow); border-color: var(--accent); }
+    .callout.green { background: var(--green-glow); border-color: var(--green); }
+    .callout strong { display: block; margin-bottom: 0.25rem; }
+    .expr-inline { font-family: var(--mono); font-size: 0.82em; background: rgba(108, 126, 225, 0.12); padding: 0.1em 0.35em; border-radius: 3px; color: var(--accent); }
+    .badge { display: inline-block; padding: 0.15em 0.55em; border-radius: 5px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .badge.critical { background: var(--red); color: var(--bg); }
+    .badge.high { background: var(--orange); color: var(--bg); }
+    .badge.medium { background: var(--yellow); color: var(--bg); }
+    .badge.low { background: var(--green); color: var(--bg); }
+    .badge.info { background: var(--accent); color: #fff; }
+    .badge.load { background: var(--teal); color: var(--bg); }
+    .badge.interact { background: var(--orange); color: var(--bg); }
+    .badge.both { background: var(--red); color: var(--bg); }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .card + .card { margin-top: 1rem; }
+    .card-header { padding: 1rem 1.25rem; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; transition: background 0.15s; }
+    .card-header:hover { background: var(--surface-hover); }
+    .card-header h3 { font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+    .chevron { transition: transform 0.2s; color: var(--text-muted); }
+    .card.open .chevron { transform: rotate(180deg); }
+    .card-body { display: none; padding: 0 1.25rem 1.25rem; }
+    .card.open .card-body { display: block; }
+
+    /* Heavy expression cards */
+    .heavy-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1rem; }
+    .heavy-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; gap: 0.75rem; }
+    .heavy-header .name { font-family: var(--mono); font-size: 0.95rem; font-weight: 600; }
+    .heavy-header .badges { display: flex; gap: 0.35rem; flex-shrink: 0; }
+    .heavy-latex { font-family: var(--mono); font-size: 0.75rem; color: var(--accent); word-break: break-all; margin-bottom: 0.6rem; opacity: 0.8; }
+    .heavy-why { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.6rem; line-height: 1.6; }
+    .heavy-alts { padding: 0; list-style: none; }
+    .heavy-alts li { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.82rem; color: var(--text); padding: 0.3rem 0; }
+    .heavy-alts li::before { content: '→'; color: var(--green); font-weight: 700; flex-shrink: 0; }
+    .cost-pill { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; padding: 0.15em 0.55em; border-radius: 4px; white-space: nowrap; }
+
+    /* Reusable patterns */
+    .pattern-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; background: var(--surface); border-radius: 10px; overflow: hidden; }
+    .pattern-table th { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .pattern-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid rgba(42, 46, 61, 0.5); vertical-align: top; }
+    .pattern-table tr:last-child td { border-bottom: none; }
+
+    /* Dependency trees */
+    .dep-tree { font-size: 0.82rem; padding: 0.5rem 0; overflow-x: auto; }
+    .dep-tree ul { list-style: none; padding-left: 0; margin: 0; }
+    .dep-tree ul ul { padding-left: 1.5rem; }
+    .dep-tree li { position: relative; }
+    .dep-tree ul ul > li::before { content: ''; position: absolute; left: -1.1rem; top: 0.85rem; width: 0.8rem; border-bottom: 1px dashed rgba(42,46,61,0.7); }
+    .dep-tree ul ul > li::after { content: ''; position: absolute; left: -1.1rem; top: 0; bottom: 0; border-left: 1px dashed rgba(42,46,61,0.7); }
+    .dep-tree ul ul > li:last-child::after { height: 0.85rem; }
+    .dep-tree .tn { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.5rem; border-radius: 4px; margin: 0.1rem 0; }
+    .dep-tree .tn.clickable { cursor: pointer; }
+    .dep-tree .tn.clickable:hover { background: var(--surface-hover); }
+    .dep-tree .tn .arrow { font-size: 0.65rem; color: var(--text-muted); width: 0.9em; display: inline-block; text-align: center; transition: transform 0.15s; }
+    .dep-tree li.collapsed > ul { display: none; }
+    .dep-tree li.collapsed > .tn .arrow { transform: rotate(-90deg); }
+    .dep-tree .tn .nm { font-family: var(--mono); font-weight: 600; }
+    .dep-tree .tn .ct { font-family: var(--mono); font-size: 0.72rem; }
+    .dep-tree .tn .tg { font-size: 0.55rem; padding: 0.05em 0.3em; border-radius: 3px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+    .dep-tree .circ { color: var(--text-muted); font-style: italic; font-size: 0.78rem; padding: 0.2rem 0.5rem; display: block; }
+
+    .tree-controls { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; }
+    .tree-controls .sm-btn { background: var(--surface-hover); border: 1px solid var(--border); border-radius: 5px; color: var(--text-muted); font-size: 0.75rem; padding: 0.3rem 0.7rem; cursor: pointer; font-family: inherit; transition: border-color 0.15s, color 0.15s; }
+    .tree-controls .sm-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .lookup-area { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .lookup-area input { flex: 1; max-width: 350px; background: var(--surface-hover); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 0.82rem; padding: 0.5rem 0.75rem; outline: none; }
+    .lookup-area input:focus { border-color: var(--accent); }
+
+    /* Concept map */
+    .concept-map { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem 1.5rem 1rem; overflow-x: auto; min-height: 120px; }
+    .concept-map.has-selection .map-node:not(.highlighted):not(.selected) { opacity: 0.12; }
+    .concept-map.has-selection .edge-svg path:not(.highlighted) { opacity: 0.02; }
+    .edge-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
+    .edge-svg path { transition: opacity 0.3s, stroke 0.2s; }
+    .edge-svg path.highlighted { stroke: var(--accent) !important; stroke-width: 2px !important; opacity: 0.55 !important; }
+    .map-layer { display: flex; justify-content: center; align-items: center; gap: 0.4rem 0.5rem; flex-wrap: wrap; padding: 0.4rem 2.5rem 0.4rem 2.5rem; position: relative; z-index: 1; }
+    .map-layer + .map-layer { margin-top: 2.5rem; }
+    .map-layer-label { position: absolute; left: 0; top: 50%; transform: translateY(-50%); font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.35; font-weight: 600; }
+    .map-node { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.55rem; border-radius: 5px; border: 1.5px solid; font-family: var(--mono); font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: opacity 0.3s, box-shadow 0.2s, transform 0.1s; white-space: nowrap; }
+    .map-node:hover { transform: translateY(-1px); z-index: 3; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    .map-node.selected { box-shadow: 0 0 0 2px var(--accent), 0 0 16px var(--accent-glow); z-index: 4; }
+    .map-node.highlighted { z-index: 2; }
+    .map-node .node-cost { font-size: 0.6rem; opacity: 0.7; }
+    .map-node .node-tag { font-size: 0.45rem; padding: 0.05em 0.2em; border-radius: 2px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+    .map-legend { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; font-size: 0.75rem; color: var(--text-muted); align-items: center; }
+    .map-legend-item { display: flex; align-items: center; gap: 0.3rem; }
+    .map-legend-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1.5px solid; }
+    .node-detail { background: var(--surface-hover); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-top: 1rem; }
+    .nd-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; gap: 0.75rem; }
+    .nd-name { font-family: var(--mono); font-size: 1.1rem; font-weight: 700; }
+    .nd-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem; padding: 0.25rem; line-height: 1; }
+    .nd-close:hover { color: var(--text); }
+    .nd-latex { font-family: var(--mono); font-size: 0.75rem; color: var(--accent); word-break: break-all; margin-bottom: 0.6rem; opacity: 0.8; }
+    .nd-deps { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.75rem; }
+    .nd-dep-col h5 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 0.35rem; font-weight: 600; }
+    .nd-dep-item { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; padding: 0.15rem 0; }
+    .nd-dep-item .dep-link { cursor: pointer; }
+    .nd-dep-item .dep-link:hover { text-decoration: underline; }
+    .nd-dep-item .dep-cost { font-family: var(--mono); font-size: 0.72rem; }
+
+    footer { text-align: center; padding: 2rem 0; color: var(--text-muted); font-size: 0.8rem; border-top: 1px solid var(--border); }
+    @media (max-width: 640px) { header h1 { font-size: 1.5rem; } .summary-grid { grid-template-columns: 1fr 1fr; } .input-row { flex-direction: column; } .nd-deps { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="container">
+  <a href="index.html" style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.82rem;color:var(--text-muted);text-decoration:none;margin-bottom:0.5rem;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">&larr; Home</a>
+  <header>
+    <h1>Focused Graph Analysis</h1>
+    <p class="subtitle">Targeted performance diagnostics: heavy expressions, reusable patterns, dependency mapping</p>
+    <p class="meta-link"><a href="cost-analysis.html">Cost methodology &rarr;</a> &nbsp;&middot;&nbsp; <a href="analysis2.html">General Analyzer v2 &rarr;</a></p>
+  </header>
+
+  <div class="input-area" id="input-area">
+    <div class="input-row">
+      <input id="url" type="text" placeholder="https://www.desmos.com/calculator/..." spellcheck="false">
+      <button class="btn" id="btn" onclick="run()">Analyze</button>
+    </div>
+    <button class="paste-toggle" onclick="document.getElementById('paste-box').classList.toggle('show')">&#128203; Or paste graph state JSON</button>
+    <div class="paste-box" id="paste-box">
+      <textarea id="json" placeholder="Paste the result of Calc.getState() here..."></textarea>
+      <div class="hint">Open graph in Desmos &rarr; press F12 &rarr; Console &rarr; type <code>JSON.stringify(Calc.getState())</code></div>
+    </div>
+  </div>
+
+  <div class="err-msg" id="err"></div>
+  <div class="loading" id="loading"><div class="spinner"></div>Fetching and analyzing graph&hellip;</div>
+  <div id="report"></div>
+</div>
+
+<script>
+/* ═══════ UTILITIES ═══════ */
+const $=id=>document.getElementById(id);
+const H=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const T=(s,n)=>s.length>n?s.slice(0,n)+'…':s;
+const ei=s=>`<span class="expr-inline">${H(s)}</span>`;
+const chevSvg='<svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>';
+function toggleCard(id){document.getElementById(id).classList.toggle('open')}
+
+/* ═══════ FETCHING (shared with analysis2.html) ═══════ */
+async function fetchState(hash){
+  const r=await fetch('https://www.desmos.com/calculator/'+hash,{headers:{'Accept':'application/json'},signal:AbortSignal.timeout(15000)});
+  if(!r.ok)return null;const data=await r.json();return data?.state||data;
+}
+async function getState(){
+  const jr=$('json').value.trim();
+  if(jr){try{return JSON.parse(jr)}catch{throw new Error('Invalid JSON pasted.')}}
+  const url=$('url').value.trim();
+  if(!url)throw new Error('Enter a Desmos URL or paste graph state JSON.');
+  const hm=url.match(/desmos\.com\/calculator\/([a-z0-9]+)/i);
+  if(!hm)throw new Error('Could not parse a Desmos graph hash from that URL.');
+  try{const s=await fetchState(hm[1]);if(s)return s}catch{}
+  throw new Error('Could not fetch the graph. Try pasting the JSON instead.');
+}
+
+/* ═══════ LATEX PARSER (shared with analysis2.html) ═══════ */
+const BUILTINS=new Set('floor,ceil,mod,abs,sign,min,max,median,mean,total,length,count,join,sort,unique,for,with,polygon,distance,midpoint,rgb,hsv,cos,sin,tan,sec,csc,cot,arccos,arcsin,arctan,log,ln,exp,sqrt,nCr,nPr,stdev,var,cov,corr,random,normaldist,tdist,poissondist,binomialdist,uniformdist,pdf,cdf,inversecdf,histogram,boxplot,dotplot,width,height'.split(','));
+
+function findDefEq(l){let d=0,i=0;while(i<l.length){if(l.startsWith('\\left',i)){d++;i+=5;continue}if(l.startsWith('\\right',i)){d=Math.max(0,d-1);i+=6;continue}if(l[i]==='='&&d===0&&i>0&&!'<>!'.includes(l[i-1]))return i;i++}return -1}
+
+function varTokens(l){
+  const v=new Set();let m;
+  const re=/([a-zA-Z])_\{([^}]+)\}/g;
+  while((m=re.exec(l))!==null){if(!BUILTINS.has(m[2]))v.add(m[1]+'_{'+m[2]+'}')}
+  const ptRe=/([A-Z](?:_\{[^}]+\})?)\.[xy]/g;
+  let pm;while((pm=ptRe.exec(l))!==null)v.add(pm[1]);
+  const cl=l.replace(/\\operatorname\{[^}]+\}/g,' ').replace(/\\[a-zA-Z]+/g,' ').replace(/[a-zA-Z]_\{[^}]+\}/g,' ').replace(/[A-Z]\.[xy]/g,' ').replace(/[0-9.]+/g,' ');
+  for(const ch of cl){if(/[a-df-wyz]/i.test(ch))v.add(ch)}
+  return v;
+}
+
+function findFnCalls(latex){
+  const calls=[];const re=/([a-zA-Z](?:_\{[^}]+\})?)\\left\(/g;let m;
+  while((m=re.exec(latex))!==null){
+    const fnName=m[1];
+    if(BUILTINS.has(fnName)||BUILTINS.has(fnName.replace(/.*_\{|\}/g,'')))continue;
+    let depth=1,i=m.index+m[0].length,argStart=i,args=[];
+    while(i<latex.length&&depth>0){
+      if(latex.startsWith('\\left(',i)){depth++;i+=6;continue}
+      if(latex.startsWith('\\left[',i)){depth++;i+=6;continue}
+      if(latex.startsWith('\\left\\{',i)){depth++;i+=7;continue}
+      if(latex.startsWith('\\right)',i)){depth--;if(depth===0){args.push(latex.slice(argStart,i));i+=7;break}i+=7;continue}
+      if(latex.startsWith('\\right]',i)||latex.startsWith('\\right\\}',i)){depth--;i+=7;continue}
+      if(latex[i]===','&&depth===1){args.push(latex.slice(argStart,i));argStart=i+1}
+      i++;
+    }
+    calls.push({fn:fnName,args,argVars:args.map(a=>[...varTokens(a)])});
+  }
+  return calls;
+}
+
+function parseExpr(latex){
+  if(!latex)return null;
+  const isAct=/[^<>!]\\to(?![a-z])/.test(latex)||latex.startsWith('\\to')||/^[a-zA-Z](?:_\{[^}]+\})?\\to/.test(latex);
+  if(isAct)return{type:'action',name:null,refs:varTokens(latex),latex,calls:findFnCalls(latex)};
+  const eq=findDefEq(latex);
+  if(eq===-1)return{type:'display',name:null,refs:varTokens(latex),latex,calls:findFnCalls(latex)};
+  const lhs=latex.slice(0,eq),rhs=latex.slice(eq+1);
+  let name=null,params=[],isFunc=false,isRec=false;
+  const fm=lhs.match(/^([a-zA-Z](?:_\{[^}]+\})?)\\left\(/);
+  if(fm){name=fm[1];isFunc=true;const pi=lhs.slice(fm[0].length).replace(/\\right\)$/,'');params=[...varTokens(pi)];if(rhs.includes(name+'\\left(')||rhs.includes(name+'('))isRec=true}
+  else{const vm=lhs.match(/^([a-zA-Z](?:_\{[^}]+\})?)/);if(vm)name=vm[1]}
+  const refs=varTokens(rhs);params.forEach(p=>refs.delete(p));if(name)refs.delete(name);
+  return{type:isFunc?'function':'variable',name,refs,isFunc,isRec,params,latex,rhs,calls:findFnCalls(rhs)};
+}
+
+/* ═══════ DEPENDENCY GRAPH ═══════ */
+function buildDeps(parsedList){
+  const def={},on={},by={},all=new Set(),callsTo={},calledBy={};
+  for(const p of parsedList){if(!p?.name)continue;def[p.name]=p;all.add(p.name)}
+  for(const p of parsedList){
+    if(!p?.name)continue;const d=new Set();
+    for(const r of p.refs)if(def[r]&&r!==p.name)d.add(r);
+    on[p.name]=d;
+    for(const dep of d){if(!by[dep])by[dep]=new Set();by[dep].add(p.name)}
+    if(p.calls)for(const c of p.calls){
+      if(def[c.fn]){
+        if(!callsTo[p.name])callsTo[p.name]=[];
+        callsTo[p.name].push({fn:c.fn,args:c.args,argVars:c.argVars});
+        if(!calledBy[c.fn])calledBy[c.fn]=[];
+        calledBy[c.fn].push({caller:p.name,args:c.args,argVars:c.argVars});
+      }
+    }
+  }
+  for(const n of all){if(!on[n])on[n]=new Set();if(!by[n])by[n]=new Set()}
+  function trans(n,v=new Set()){if(v.has(n))return v;v.add(n);for(const c of(by[n]||[]))trans(c,v);return v}
+  function transUp(n,v=new Set()){if(v.has(n))return v;v.add(n);for(const c of(on[n]||[]))transUp(c,v);return v}
+  return{def,on,by,all,trans,transUp,callsTo,calledBy};
+}
+
+/* ═══════ COST ESTIMATION (v2) ═══════ */
+function eCost(p){
+  if(!p)return 1;const l=p.latex||'';
+  if(l.length>2000)return 1;
+  let c=1;c+=l.length*0.003;
+  if(p.isRec)c+=30;
+  const hasSum=/\\sum|\\operatorname\{total\}/.test(l),hasInt=/\\int/.test(l);
+  if(hasSum&&hasInt)c+=20;else{if(hasSum)c+=6;if(hasInt)c+=10;}
+  if(/\\operatorname\{for\}/.test(l))c+=8;
+  if(/\\operatorname\{repeat\}/.test(l))c+=6;
+  if(/\\operatorname\{polygon\}/.test(l))c+=4;
+  if(/\\operatorname\{with\}/.test(l))c+=2;
+  if(/\\operatorname\{join\}/.test(l))c+=2;
+  if(/\\left\\\{/.test(l))c+=1;
+  return c;
+}
+
+/* ═══════ FULL ANALYSIS ═══════ */
+function analyze(state){
+  const items=state?.expressions?.list||[];
+  const folders={},exprs=[],parsed=[];
+  const m={expr:0,fold:0,img:0,slider:0,drag:0,movPt:0,rec:0,fn:0,integ:0,sumInt:0,rpt:0,listC:0,sum:0,poly:0,lgList:0};
+
+  for(const it of items)if(it.type==='folder'){m.fold++;folders[it.id]={title:it.title||'',hidden:!!it.hidden}}
+  for(const it of items){
+    if(it.type!=='expression'||!it.latex)continue;
+    if(it.latex.includes('j_{uice}'))continue;
+    m.expr++;const l=it.latex;
+    if(it.slider)m.slider++;if(it.dragMode==='XY')m.drag++;
+    const isMovPt=/^[A-Z](?:_\{[^}]+\})?\s*=\s*\\left\(\s*-?[\d.]/.test(l);
+    if(isMovPt)m.movPt++;
+    if(l.length>2000)m.lgList++;
+    if(it.type==='image'){m.img++;continue}
+    const hasSum=/\\sum|\\operatorname\{total\}/.test(l),hasInt=/\\int/.test(l);
+    if(hasSum)m.sum++;if(hasInt)m.integ++;if(hasSum&&hasInt)m.sumInt++;
+    if(/\\operatorname\{for\}/.test(l))m.listC++;
+    if(/\\operatorname\{repeat\}/.test(l))m.rpt++;
+    if(/\\operatorname\{polygon\}/.test(l))m.poly++;
+    const p=parseExpr(l);if(p?.isFunc)m.fn++;if(p?.isRec)m.rec++;
+    parsed.push(p);
+    exprs.push({id:it.id,latex:l,fid:it.folderId,hidden:!!it.hidden,slider:!!it.slider,drag:it.dragMode,p,isMovPt});
+  }
+
+  const dep=buildDeps(parsed);
+
+  const interactables=[];
+  for(const e of exprs){
+    if(e.slider||e.drag==='XY'||e.isMovPt){
+      if(!e.p?.name)continue;
+      const type=e.slider?'slider':e.drag==='XY'?'draggable':'movable point';
+      const aff=dep.trans(e.p.name);aff.delete(e.p.name);
+      let cost=0;for(const a of aff)cost+=eCost(dep.def[a]);
+      interactables.push({name:e.p.name,type,count:aff.size,cost,affected:aff,expr:e});
+    }
+  }
+  interactables.sort((a,b)=>b.cost-a.cost);
+
+  const interactiveDownstream=new Set();
+  for(const ia of interactables)for(const a of ia.affected)interactiveDownstream.add(a);
+
+  const inputs=[];
+  for(const n of dep.all){if(dep.on[n].size===0){
+    const e=exprs.find(x=>x.p?.name===n);
+    const type=e?.slider?'slider':e?.drag==='XY'?'draggable':e?.isMovPt?'movable point':e?.p?.isFunc?'function':'constant';
+    const aff=dep.trans(n);aff.delete(n);
+    let cost=0;for(const a of aff)cost+=eCost(dep.def[a]);
+    inputs.push({name:n,type,count:aff.size,cost,affected:aff});
+  }}
+  inputs.sort((a,b)=>b.cost-a.cost);
+
+  return{m,folders,exprs,parsed,dep,interactables,interactiveDownstream,inputs};
+}
+
+/* ═══════ SECTION 1: HEAVY EXPRESSIONS ═══════ */
+const COST_THRESHOLD=4;
+
+function classifyHeavy(e,interactiveDownstream,dep){
+  const p=e.p,l=e.latex,cost=eCost(p);
+  const patterns=[], alts=[];
+  const isInteractive=interactiveDownstream.has(p?.name);
+  const isStatic=!isInteractive;
+
+  if(p?.isRec){
+    patterns.push('Recursive definition');
+    alts.push('Reduce recursion depth or cap the iteration count at a lower bound');
+    alts.push('Defer computation with a Computation Layer action so the chain rebuilds only on drag-end, not every frame');
+  }
+  if(/\\sum|\\operatorname\{total\}/.test(l)&&/\\int/.test(l)){
+    patterns.push('Nested summation + integral');
+    alts.push('Separate the integral from the sum — precompute the integral symbolically if possible');
+    alts.push('Reduce the summation range to lower the number of numerical integrations');
+  } else {
+    if(/\\int/.test(l)){
+      patterns.push('Definite integral');
+      alts.push('Replace with a closed-form antiderivative if one exists');
+      if(isInteractive) alts.push('Cache the result in a variable and recompute only when relevant inputs change');
+    }
+    if(/\\sum|\\operatorname\{total\}/.test(l)){
+      patterns.push('Summation / total');
+      alts.push('Reduce the list size being summed if precision allows');
+    }
+  }
+  if(/\\operatorname\{for\}/.test(l)){
+    patterns.push('List comprehension');
+    alts.push('Reduce the iteration range if visual fidelity is not affected');
+    alts.push('Store the result in a named variable so it computes once rather than being inlined repeatedly');
+  }
+  if(/\\operatorname\{repeat\}/.test(l)){
+    patterns.push('Repeat operation');
+    alts.push('Lower the repeat count to the minimum needed for the visual effect');
+  }
+  if(/\\operatorname\{polygon\}/.test(l)){
+    patterns.push('Polygon rendering');
+    alts.push('Reduce vertex count or merge adjacent polygons');
+  }
+  if(l.length>500&&!p?.isRec&&patterns.length===0){
+    patterns.push('Very long expression');
+    alts.push('Break into smaller named sub-variables for clarity and potential Desmos caching benefits');
+  }
+  if(patterns.length===0){
+    patterns.push('Multiple moderate-cost operations combined');
+    alts.push('Audit for any sub-expressions that could be precomputed and stored in a variable');
+  }
+
+  let impact;
+  if(isInteractive&&isStatic) impact='both';
+  else if(isInteractive) impact='interact';
+  else impact='load';
+
+  const hasUpstreamInteractable=isInteractive;
+  if(hasUpstreamInteractable){
+    impact='interact';
+  } else {
+    impact='load';
+  }
+
+  return{cost,patterns,alts:alts.slice(0,2),impact};
+}
+
+function genHeavySection(a){
+  const heavy=a.exprs.filter(e=>eCost(e.p)>=COST_THRESHOLD).sort((x,y)=>eCost(y.p)-eCost(x.p));
+  if(heavy.length===0) return `<section id="sec-heavy"><h2><span class="section-icon">&#9888;&#65039;</span> Heavy Expressions</h2><div class="callout green"><strong>No computationally heavy expressions found.</strong>All expressions are below the cost threshold of ${COST_THRESHOLD}. This graph should perform well.</div></section>`;
+
+  let h=`<section id="sec-heavy"><h2><span class="section-icon">&#9888;&#65039;</span> Heavy Expressions</h2>`;
+  h+=`<p class="desc">${heavy.length} expression(s) exceed the cost threshold of ${COST_THRESHOLD}. Each is classified by whether its impact is on <span class="badge load" style="font-size:0.65rem">loading</span> the graph or on <span class="badge interact" style="font-size:0.65rem">interactivity</span> during use.</p>`;
+
+  for(const e of heavy.slice(0,25)){
+    const info=classifyHeavy(e,a.interactiveDownstream,a.dep);
+    const cc=info.cost>20?'var(--red)':info.cost>8?'var(--orange)':'var(--yellow)';
+    const impLabel=info.impact==='interact'?'Interactivity':info.impact==='load'?'Loading':'Both';
+    const impClass=info.impact;
+
+    h+=`<div class="heavy-card">`;
+    h+=`<div class="heavy-header"><span class="name" style="color:${cc}">${H(e.p?.name||'(display #'+e.id+')')}</span>`;
+    h+=`<div class="badges"><span class="cost-pill" style="background:${cc.replace('var(--','rgba(').replace(')',',0.15)')};color:${cc}">${info.cost.toFixed(1)}</span>`;
+    h+=`<span class="badge ${impClass}">${impLabel}</span></div></div>`;
+    h+=`<div class="heavy-latex">${H(T(e.latex,180))}</div>`;
+    h+=`<div class="heavy-why"><strong style="color:var(--text);font-size:0.82rem">Why it's heavy:</strong> ${info.patterns.join(', ')}. `;
+    if(info.impact==='interact') h+=`This expression recalculates every time a user drags or adjusts an interactive element, directly affecting frame rate.`;
+    else if(info.impact==='load') h+=`This expression computes when the graph loads or a static dependency changes. It does not recalculate during interaction, so it affects initial load time but not drag responsiveness.`;
+    else h+=`This expression is both expensive to compute initially and recalculates during interaction.`;
+    h+=`</div>`;
+    if(info.alts.length>0){
+      h+=`<ul class="heavy-alts">${info.alts.map(a=>`<li>${a}</li>`).join('')}</ul>`;
+    }
+    h+=`</div>`;
+  }
+  if(heavy.length>25) h+=`<p style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:0.5rem">…and ${heavy.length-25} more heavy expressions</p>`;
+  h+=`</section>`;
+  return h;
+}
+
+/* ═══════ SECTION 2: REUSABLE SUB-EXPRESSIONS ═══════ */
+
+/*
+  Scan every expression's LaTeX for mathematical fragments that appear
+  verbatim in 2+ different expressions but are NOT already stored in
+  a named variable.  Two detection strategies:
+
+  1. Repeated inline fragments — sliding-window scan of the RHS LaTeX
+     looking for substrings ≥ 20 chars that show up in multiple exprs.
+     Exclude any fragment that exactly equals a known variable's RHS
+     (since it's already stored).
+
+  2. Identical function calls — same function called with the same
+     arguments from multiple expressions, where the result is not
+     already cached in a variable.
+*/
+
+function findRepeatedFragments(exprs,dep){
+  const MIN_LEN=20,MAX_LEN=120,STEP=4,MIN_OCCUR=2;
+
+  const namedRHS=new Set();
+  for(const e of exprs){
+    if(!e.p?.name||!e.p.rhs)continue;
+    namedRHS.add(e.p.rhs.trim());
+  }
+
+  const rhsList=[];
+  for(const e of exprs){
+    if(!e.latex||e.latex.length>2000)continue;
+    const eq=findDefEq(e.latex);
+    const rhs=eq>0?e.latex.slice(eq+1):e.latex;
+    if(rhs.length>=MIN_LEN) rhsList.push({name:e.p?.name||'#'+e.id,rhs});
+  }
+
+  const fragMap=new Map();
+  for(const{name,rhs}of rhsList){
+    const seen=new Set();
+    for(let len=MIN_LEN;len<=Math.min(MAX_LEN,rhs.length);len+=10){
+      for(let i=0;i<=rhs.length-len;i+=STEP){
+        const frag=rhs.slice(i,i+len);
+        if(seen.has(frag))continue;seen.add(frag);
+        if(!fragMap.has(frag))fragMap.set(frag,new Set());
+        fragMap.get(frag).add(name);
+      }
+    }
+  }
+
+  let hits=[...fragMap.entries()]
+    .filter(([f,owners])=>owners.size>=MIN_OCCUR)
+    .filter(([f])=>!namedRHS.has(f.trim()));
+
+  hits.sort((a,b)=>(b[0].length*b[1].size)-(a[0].length*a[1].size));
+
+  const deduped=[];
+  for(const[frag,owners]of hits){
+    const dominated=deduped.some(([longer,lo])=>
+      longer.includes(frag)&&lo.size>=owners.size);
+    if(!dominated) deduped.push([frag,owners]);
+  }
+  return deduped.slice(0,12);
+}
+
+function findRepeatedCalls(exprs,dep){
+  const callSigs=new Map();
+  for(const e of exprs){
+    if(!e.p?.calls)continue;
+    for(const c of e.p.calls){
+      if(!dep.def[c.fn])continue;
+      const sig=c.fn+'('+c.args.map(a=>a.trim()).join(',')+')';
+      if(!callSigs.has(sig))callSigs.set(sig,{fn:c.fn,args:c.args,callers:new Set(),fnCost:eCost(dep.def[c.fn])});
+      callSigs.get(sig).callers.add(e.p?.name||e.id);
+    }
+  }
+  const namedResults=new Set();
+  for(const e of exprs){
+    if(!e.p?.name||!e.p.calls||e.p.calls.length!==1)continue;
+    const c=e.p.calls[0];
+    const sig=c.fn+'('+c.args.map(a=>a.trim()).join(',')+')';
+    namedResults.add(sig);
+  }
+  return[...callSigs.entries()]
+    .filter(([sig,v])=>v.callers.size>=2&&!namedResults.has(sig))
+    .sort((a,b)=>b[1].callers.size*b[1].fnCost-a[1].callers.size*a[1].fnCost);
+}
+
+function genReusableSection(a){
+  const fragments=findRepeatedFragments(a.exprs,a.dep);
+  const calls=findRepeatedCalls(a.exprs,a.dep);
+  const found=fragments.length>0||calls.length>0;
+
+  let h=`<section id="sec-reuse"><h2><span class="section-icon">&#128260;</span> Reusable Sub-Expressions</h2>`;
+  h+=`<p class="desc">Scanning all expression LaTeX for mathematical computations that are calculated in multiple places but never stored in a named variable. Extracting these into a variable avoids redundant recalculation.</p>`;
+
+  if(!found){
+    h+=`<div class="callout green"><strong>No repeated unstored sub-expressions found.</strong> Every computation that appears in multiple expressions is already stored in a named variable. The graph is well-factored.</div>`;
+    h+=`</section>`;
+    return h;
+  }
+
+  if(fragments.length>0){
+    h+=`<div class="card open" id="card-frags"><div class="card-header" onclick="toggleCard('card-frags')"><h3>Repeated Inline Computations (${fragments.length})</h3>${chevSvg}</div><div class="card-body">`;
+    h+=`<p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem">These mathematical fragments appear verbatim in multiple expressions but are never assigned to a variable. Each occurrence is recalculated independently. Consider storing the result in a named variable and referencing it instead.</p>`;
+
+    for(const[frag,owners]of fragments){
+      const ownerList=[...owners];
+      const cc=frag.length>60?'var(--orange)':'var(--yellow)';
+      h+=`<div style="background:var(--surface-hover);border-radius:8px;padding:0.85rem 1rem;margin-bottom:0.6rem">`;
+      h+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.35rem">`;
+      h+=`<span style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);word-break:break-all;flex:1">${H(T(frag,120))}</span>`;
+      h+=`<span class="badge high" style="flex-shrink:0;margin-left:0.5rem">${ownerList.length}×</span></div>`;
+      h+=`<div style="font-size:0.78rem;color:var(--text-muted)">Found in: ${ownerList.slice(0,6).map(n=>ei(n)).join(', ')}${ownerList.length>6?' <span style="opacity:0.6">+'+( ownerList.length-6)+' more</span>':''}</div>`;
+      h+=`<div style="font-size:0.78rem;color:var(--green);margin-top:0.3rem">→ Store as a named variable and reference it in each expression</div>`;
+      h+=`</div>`;
+    }
+    h+=`</div></div>`;
+  }
+
+  if(calls.length>0){
+    h+=`<div class="card${fragments.length===0?' open':''}" id="card-dupcalls"><div class="card-header" onclick="toggleCard('card-dupcalls')"><h3>Repeated Function Calls (${Math.min(calls.length,12)})</h3>${chevSvg}</div><div class="card-body">`;
+    h+=`<p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem">These identical function calls appear in multiple expressions but the result is never cached. If the function is expensive, store the result once (e.g., <code>r = f(a, b)</code>) and reference <code>r</code> everywhere.</p>`;
+    h+=`<table class="pattern-table"><thead><tr><th>Call</th><th>Fn Cost</th><th>Appears In</th><th>Recommendation</th></tr></thead><tbody>`;
+    for(const[sig,info]of calls.slice(0,12)){
+      const callerList=[...info.callers].slice(0,5).map(c=>ei(c)).join(', ');
+      const extra=info.callers.size>5?' +'+( info.callers.size-5):'';
+      const cc=info.fnCost>8?'var(--orange)':info.fnCost>3?'var(--yellow)':'var(--text-muted)';
+      const rec=info.fnCost>=4?`<span style="color:var(--green)">Cache in a variable</span>`:`<span style="color:var(--text-muted)">Low cost — optional</span>`;
+      h+=`<tr><td style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);word-break:break-all">${H(T(info.fn+'('+info.args.map(x=>T(x.trim(),20)).join(', ')+')',70))}</td><td style="font-family:var(--mono);color:${cc}">${info.fnCost.toFixed(1)}</td><td style="font-size:0.78rem">${callerList}${extra}</td><td style="font-size:0.78rem">${rec}</td></tr>`;
+    }
+    h+=`</tbody></table></div></div>`;
+  }
+
+  h+=`</section>`;
+  return h;
+}
+
+/* ═══════ TREE RENDERING ═══════ */
+let _tnId=0;
+
+function renderTree(name,dep,dir,visited,depth,maxDepth,maxChildren){
+  if(!dep.def[name])return'';
+  const id='tn'+(_tnId++);
+  const p=dep.def[name];const cost=eCost(p);
+  const cc=cost>20?'red':cost>8?'orange':cost>3?'yellow':'text-muted';
+  const children=dir==='down'?[...(dep.by[name]||[])]:[...(dep.on[name]||[])];
+  children.sort((a,b)=>eCost(dep.def[b])-eCost(dep.def[a]));
+  if(visited.has(name))return`<li><span class="circ">↻ ${H(name)} (circular)</span></li>`;
+  const hasKids=children.length>0&&depth<maxDepth;
+  const collapsed=depth>=2?' collapsed':'';
+  let h=`<li id="${id}"${hasKids?` class="${collapsed.trim()}"`:''}>`;
+  h+=`<span class="tn${hasKids?' clickable':''}" ${hasKids?`onclick="document.getElementById('${id}').classList.toggle('collapsed')"`:''}>`;
+  if(hasKids)h+=`<span class="arrow">▼</span>`;
+  else if(children.length>0&&depth>=maxDepth)h+=`<span class="arrow" style="opacity:0.3;font-size:0.6rem">⋯</span>`;
+  else h+=`<span class="arrow" style="opacity:0.2">·</span>`;
+  h+=`<span class="nm" style="color:var(--${cc})">${H(name)}</span>`;
+  h+=`<span class="ct" style="color:var(--${cc})">${cost.toFixed(1)}</span>`;
+  if(p?.isFunc)h+=`<span class="tg" style="background:var(--accent-glow);color:var(--accent)">fn</span>`;
+  if(p?.isRec)h+=`<span class="tg" style="background:var(--red-glow);color:var(--red)">rec</span>`;
+  h+=`</span>`;
+  if(hasKids){
+    const nv=new Set(visited);nv.add(name);
+    h+=`<ul>`;
+    const shown=children.slice(0,maxChildren||20);
+    for(const c of shown)h+=renderTree(c,dep,dir,nv,depth+1,maxDepth,maxChildren);
+    if(children.length>shown.length)h+=`<li><span class="circ">+${children.length-shown.length} more…</span></li>`;
+    h+=`</ul>`;
+  }
+  h+=`</li>`;return h;
+}
+
+/* ═══════ SECTION 3: INTERACTABLE ELEMENT TREES ═══════ */
+function genInteractableSection(a){
+  let h=`<section id="sec-interact"><h2><span class="section-icon">&#128070;</span> Interactable Element Dependencies</h2>`;
+  if(a.interactables.length===0){
+    h+=`<div class="callout accent"><strong>No interactive elements detected.</strong>This graph has no sliders, draggable elements, or movable points.</div></section>`;
+    return h;
+  }
+  h+=`<p class="desc">Each interactive element (slider, draggable, movable point) and the full tree of expressions that recalculate when it changes.</p>`;
+
+  for(let i=0;i<a.interactables.length;i++){
+    const ia=a.interactables[i];
+    const sevClass=ia.cost>50?'critical':ia.cost>20?'high':ia.cost>5?'medium':'low';
+    const open=i===0?' open':'';
+    const cid='card-ia'+i;
+    h+=`<div class="card${open}" id="${cid}"><div class="card-header" onclick="toggleCard('${cid}')"><h3>`;
+    h+=`<span class="badge ${sevClass}">${ia.type}</span> ${ei(ia.name)} &mdash; ${ia.count} dependent(s), cost ${ia.cost.toFixed(1)}`;
+    h+=`</h3>${chevSvg}</div><div class="card-body">`;
+    h+=`<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem">When ${ei(ia.name)} changes, <strong>${ia.count}</strong> expression(s) recalculate with a total triggered cost of <strong style="color:${ia.cost>50?'var(--red)':ia.cost>20?'var(--orange)':'var(--green)'}">${ia.cost.toFixed(1)}</strong>.</div>`;
+    _tnId=0;
+    h+=`<div class="dep-tree"><ul>${renderTree(ia.name,a.dep,'down',new Set(),0,6,15)}</ul></div>`;
+    h+=`</div></div>`;
+  }
+  h+=`</section>`;
+  return h;
+}
+
+/* ═══════ SECTION 4: DEPENDENCY CONCEPT MAP ═══════ */
+function computeLayers(dep){
+  const rank={},computing=new Set();
+  function cr(n){
+    if(rank[n]!==undefined)return rank[n];
+    if(computing.has(n))return 0;
+    computing.add(n);
+    const parents=[...(dep.on[n]||[])];
+    if(parents.length===0){rank[n]=0;computing.delete(n);return 0}
+    let mx=0;for(const p of parents)mx=Math.max(mx,cr(p));
+    rank[n]=mx+1;computing.delete(n);return rank[n];
+  }
+  for(const n of dep.all)cr(n);
+  const layers={};let maxL=0;
+  for(const[n,r]of Object.entries(rank)){if(!layers[r])layers[r]=[];layers[r].push(n);maxL=Math.max(maxL,r)}
+  return{rank,layers,maxL};
+}
+
+function getVisibleNodes(dep,max){
+  const all=[...dep.all];
+  if(all.length<=max)return{nodes:new Set(all),filtered:false,total:all.length};
+  const sc={};
+  for(const n of all){
+    let s=eCost(dep.def[n]);
+    s+=(dep.by[n]?.size||0)*2;s+=(dep.on[n]?.size||0);
+    if(dep.def[n]?.isRec)s+=50;if(dep.def[n]?.isFunc)s+=3;
+    if(dep.on[n]?.size===0)s+=5;
+    sc[n]=s;
+  }
+  all.sort((a,b)=>sc[b]-sc[a]);
+  return{nodes:new Set(all.slice(0,max)),filtered:true,total:all.length};
+}
+
+function nodeColor(cost){
+  if(cost>20)return{bg:'var(--red-glow)',border:'var(--red)',text:'var(--red)'};
+  if(cost>8)return{bg:'var(--orange-glow)',border:'var(--orange)',text:'var(--orange)'};
+  if(cost>3)return{bg:'var(--yellow-glow)',border:'var(--yellow)',text:'var(--yellow)'};
+  return{bg:'var(--surface-hover)',border:'var(--border)',text:'var(--text-muted)'};
+}
+
+function genFullTreeSection(a){
+  let h=`<section id="sec-tree"><h2><span class="section-icon">&#127795;</span> Dependency Concept Map</h2>`;
+  h+=`<p class="desc">A unified map of every dependency chain in the graph. Expressions are layered from root inputs (top) to final outputs (bottom). Click any node to highlight its full upstream and downstream connections.</p>`;
+
+  if(a.dep.all.size===0){
+    h+=`<div class="callout accent"><strong>No named expressions found.</strong></div></section>`;return h;
+  }
+
+  const{rank,layers,maxL}=computeLayers(a.dep);
+  const{nodes:visible,filtered,total}=getVisibleNodes(a.dep,80);
+
+  h+=`<div class="lookup-area"><input id="tree-lookup" list="tree-names" placeholder="Search for an expression…" spellcheck="false"><button class="btn" style="padding:0.5rem 1.25rem;font-size:0.82rem" onclick="lookupExpr()">Look Up</button></div>`;
+  h+=`<datalist id="tree-names">${[...a.dep.all].sort().map(n=>`<option value="${H(n)}">`).join('')}</datalist>`;
+
+  if(filtered) h+=`<div class="callout accent" style="margin-bottom:1rem"><strong>Showing ${visible.size} of ${total} expressions.</strong> Lower-impact expressions are hidden. Use the search box to find any expression.</div>`;
+
+  h+=`<div class="map-legend">`;
+  h+=`<span style="font-weight:600;font-size:0.72rem">COST:</span>`;
+  h+=`<div class="map-legend-item"><div class="map-legend-swatch" style="background:var(--red-glow);border-color:var(--red)"></div>Critical (&gt;20)</div>`;
+  h+=`<div class="map-legend-item"><div class="map-legend-swatch" style="background:var(--orange-glow);border-color:var(--orange)"></div>High (&gt;8)</div>`;
+  h+=`<div class="map-legend-item"><div class="map-legend-swatch" style="background:var(--yellow-glow);border-color:var(--yellow)"></div>Medium (&gt;3)</div>`;
+  h+=`<div class="map-legend-item"><div class="map-legend-swatch" style="background:var(--surface-hover);border-color:var(--border)"></div>Low</div>`;
+  h+=`</div>`;
+
+  h+=`<div class="concept-map" id="concept-map"><svg class="edge-svg" id="edge-svg"></svg>`;
+  for(let layer=0;layer<=maxL;layer++){
+    const ln=(layers[layer]||[]).filter(n=>visible.has(n));
+    if(ln.length===0)continue;
+    ln.sort((x,y)=>{
+      const dx=(a.dep.by[x]?.size||0),dy=(a.dep.by[y]?.size||0);
+      if(dy!==dx)return dy-dx;
+      return eCost(a.dep.def[y])-eCost(a.dep.def[x]);
+    });
+    const label=layer===0?'Roots':layer===maxL?'Leaves':'L'+layer;
+    h+=`<div class="map-layer"><span class="map-layer-label">${label}</span>`;
+    for(const name of ln){
+      const p=a.dep.def[name];const cost=eCost(p);const nc=nodeColor(cost);
+      let tags='';
+      if(p?.isFunc)tags+=`<span class="node-tag" style="background:var(--accent-glow);color:var(--accent)">fn</span>`;
+      if(p?.isRec)tags+=`<span class="node-tag" style="background:var(--red-glow);color:var(--red)">rec</span>`;
+      const eName=name.replace(/'/g,"\\'");
+      h+=`<div class="map-node" data-name="${H(name)}" style="background:${nc.bg};border-color:${nc.border};color:${nc.text}" onclick="selectNode('${eName}')">${H(T(name,22))} <span class="node-cost">${cost.toFixed(1)}</span>${tags}</div>`;
+    }
+    h+=`</div>`;
+  }
+  h+=`</div>`;
+  h+=`<div id="node-detail"></div>`;
+  h+=`</section>`;
+  return h;
+}
+
+/* ═══════ MAIN REPORT ═══════ */
+let _analysis=null;
+
+function genReport(a,graphUrl){
+  _analysis=a;
+  let html='';
+  const urlLink=graphUrl?` &mdash; <a href="${H(graphUrl)}" target="_blank">${H(graphUrl.split('/').pop())}</a>`:'';
+  html+=`<header><h1>Focused Graph Analysis</h1><p class="subtitle">Performance diagnostics${urlLink}</p></header>`;
+
+  const heavyCount=a.exprs.filter(e=>eCost(e.p)>=COST_THRESHOLD).length;
+  const stats=[
+    {v:a.m.expr,l:'Total Expressions',c:'accent'},
+    {v:heavyCount,l:'Heavy Expressions',c:heavyCount>5?'red':heavyCount>0?'orange':'teal'},
+    {v:a.interactables.length,l:'Interactive Elements',c:a.interactables.length>3?'orange':'teal'},
+    {v:a.m.fn,l:'Custom Functions',c:'accent'}
+  ];
+  html+=`<div class="summary-grid">${stats.map(s=>`<div class="stat-card ${s.c}"><div class="value">${s.v}</div><div class="label">${H(s.l)}</div></div>`).join('')}</div>`;
+
+  html+=`<div class="toc">`;
+  html+=`<a href="#sec-heavy"><span class="num">1</span> Heavy Expressions</a>`;
+  html+=`<a href="#sec-reuse"><span class="num">2</span> Reusable Patterns</a>`;
+  html+=`<a href="#sec-interact"><span class="num">3</span> Interactive Dependencies</a>`;
+  html+=`<a href="#sec-tree"><span class="num">4</span> Dependency Concept Map</a>`;
+  html+=`</div>`;
+
+  html+=genHeavySection(a);
+  html+=genReusableSection(a);
+  html+=genInteractableSection(a);
+  html+=genFullTreeSection(a);
+
+  html+=`<footer>Focused Graph Analysis &middot; <a href="analysis2.html">General Analyzer v2</a> &middot; <a href="cost-analysis.html">Cost Methodology</a> &middot; <a href="compare.html">Graph Comparator</a></footer>`;
+  return html;
+}
+
+/* ═══════ CONCEPT MAP INTERACTION ═══════ */
+function drawConceptMap(){
+  const box=$('concept-map');if(!box||!_analysis)return;
+  const svg=$('edge-svg');svg.innerHTML='';
+  svg.setAttribute('width',box.scrollWidth);
+  svg.setAttribute('height',box.scrollHeight);
+  const bRect=box.getBoundingClientRect();const sl=box.scrollLeft,st=box.scrollTop;
+  const dep=_analysis.dep;
+  for(const name of dep.all){
+    const fromEl=box.querySelector('[data-name="'+name.replace(/"/g,'\\"')+'"]');
+    if(!fromEl)continue;
+    for(const child of(dep.by[name]||[])){
+      const toEl=box.querySelector('[data-name="'+child.replace(/"/g,'\\"')+'"]');
+      if(!toEl)continue;
+      const fr=fromEl.getBoundingClientRect(),tr=toEl.getBoundingClientRect();
+      const x1=fr.left+fr.width/2-bRect.left+sl, y1=fr.bottom-bRect.top+st;
+      const x2=tr.left+tr.width/2-bRect.left+sl, y2=tr.top-bRect.top+st;
+      const mid=(y1+y2)/2;
+      const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d',`M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`);
+      path.setAttribute('fill','none');
+      path.setAttribute('stroke','rgba(108,126,225,0.13)');
+      path.setAttribute('stroke-width','1.5');
+      path.dataset.from=name;path.dataset.to=child;
+      svg.appendChild(path);
+    }
+  }
+}
+
+function selectNode(name){
+  const box=$('concept-map');if(!box||!_analysis)return;
+  const dep=_analysis.dep;
+  const wasSelected=box.querySelector('.map-node.selected[data-name="'+name.replace(/"/g,'\\"')+'"]');
+  box.querySelectorAll('.map-node.selected,.map-node.highlighted').forEach(n=>n.classList.remove('selected','highlighted'));
+  box.querySelectorAll('.edge-svg path.highlighted').forEach(p=>p.classList.remove('highlighted'));
+  box.classList.remove('has-selection');
+  $('node-detail').innerHTML='';
+  if(wasSelected)return;
+
+  box.classList.add('has-selection');
+  const selEl=box.querySelector('[data-name="'+name.replace(/"/g,'\\"')+'"]');
+  if(selEl)selEl.classList.add('selected');
+
+  const upstream=dep.transUp(name), downstream=dep.trans(name);
+  const connected=new Set([...upstream,...downstream]);
+  for(const n of connected){
+    const el=box.querySelector('[data-name="'+n.replace(/"/g,'\\"')+'"]');
+    if(el&&!el.classList.contains('selected'))el.classList.add('highlighted');
+  }
+  box.querySelectorAll('.edge-svg path').forEach(p=>{
+    if(connected.has(p.dataset.from)&&connected.has(p.dataset.to))p.classList.add('highlighted');
+  });
+  showNodeDetail(name);
+}
+
+function showNodeDetail(name){
+  const dep=_analysis.dep,p=dep.def[name];if(!p)return;
+  const cost=eCost(p);
+  const cc=cost>20?'var(--red)':cost>8?'var(--orange)':cost>3?'var(--yellow)':'var(--text-muted)';
+  const up=[...(dep.on[name]||[])].sort((a,b)=>eCost(dep.def[b])-eCost(dep.def[a]));
+  const dn=[...(dep.by[name]||[])].sort((a,b)=>eCost(dep.def[b])-eCost(dep.def[a]));
+  const upAll=dep.transUp(name);upAll.delete(name);
+  const dnAll=dep.trans(name);dnAll.delete(name);
+
+  let h=`<div class="node-detail"><div class="nd-header">`;
+  h+=`<span class="nd-name" style="color:${cc}">${H(name)}${p.isFunc?'('+p.params.join(', ')+')':''}</span>`;
+  h+=`<div style="display:flex;align-items:center;gap:0.5rem">`;
+  h+=`<span class="cost-pill" style="background:${cc.replace('var(--','rgba(').replace(')',',0.15)')};color:${cc}">${cost.toFixed(1)}</span>`;
+  h+=`<button class="nd-close" onclick="clearSelection()" title="Clear selection">✕</button>`;
+  h+=`</div></div>`;
+  if(p.latex)h+=`<div class="nd-latex">${H(T(p.latex,200))}</div>`;
+  h+=`<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">Type: ${p.isFunc?'function':p.type||'variable'}${p.isRec?' (recursive)':''} &middot; Full upstream chain: ${upAll.size} &middot; Full downstream chain: ${dnAll.size}</div>`;
+
+  h+=`<div class="nd-deps"><div class="nd-dep-col"><h5>↑ Depends on (${up.length})</h5>`;
+  if(up.length>0){
+    for(const u of up.slice(0,15)){
+      const uc=eCost(dep.def[u]),ucc=uc>20?'var(--red)':uc>8?'var(--orange)':uc>3?'var(--yellow)':'var(--text-muted)';
+      h+=`<div class="nd-dep-item"><span class="expr-inline dep-link" onclick="selectNode('${u.replace(/'/g,"\\'")}')">${H(u)}</span><span class="dep-cost" style="color:${ucc}">${uc.toFixed(1)}</span></div>`;
+    }
+    if(up.length>15)h+=`<div style="font-size:0.75rem;color:var(--text-muted)">+${up.length-15} more</div>`;
+  } else h+=`<div style="font-size:0.78rem;color:var(--text-muted);font-style:italic">Root — no dependencies</div>`;
+  h+=`</div>`;
+
+  h+=`<div class="nd-dep-col"><h5>↓ Depended on by (${dn.length})</h5>`;
+  if(dn.length>0){
+    for(const d of dn.slice(0,15)){
+      const dc=eCost(dep.def[d]),dcc=dc>20?'var(--red)':dc>8?'var(--orange)':dc>3?'var(--yellow)':'var(--text-muted)';
+      h+=`<div class="nd-dep-item"><span class="expr-inline dep-link" onclick="selectNode('${d.replace(/'/g,"\\'")}')">${H(d)}</span><span class="dep-cost" style="color:${dcc}">${dc.toFixed(1)}</span></div>`;
+    }
+    if(dn.length>15)h+=`<div style="font-size:0.75rem;color:var(--text-muted)">+${dn.length-15} more</div>`;
+  } else h+=`<div style="font-size:0.78rem;color:var(--text-muted);font-style:italic">Leaf — nothing depends on this</div>`;
+  h+=`</div></div></div>`;
+
+  const detail=$('node-detail');
+  detail.innerHTML=h;
+  detail.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function clearSelection(){
+  const box=$('concept-map');if(!box)return;
+  box.querySelectorAll('.map-node.selected,.map-node.highlighted').forEach(n=>n.classList.remove('selected','highlighted'));
+  box.querySelectorAll('.edge-svg path.highlighted').forEach(p=>p.classList.remove('highlighted'));
+  box.classList.remove('has-selection');
+  $('node-detail').innerHTML='';
+}
+
+function lookupExpr(){
+  const name=$('tree-lookup')?.value.trim();
+  if(!name||!_analysis)return;
+  if(!_analysis.dep.def[name]){
+    $('node-detail').innerHTML=`<div class="callout orange" style="margin-top:1rem"><strong>Expression "${H(name)}" not found.</strong> Make sure you type the exact name (including subscripts like a_{bc}).</div>`;
+    return;
+  }
+  selectNode(name);
+  const el=$('concept-map')?.querySelector('[data-name="'+name.replace(/"/g,'\\"')+'"]');
+  if(el)el.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+/* ═══════ UI ═══════ */
+function resetForm(){
+  $('report').innerHTML='';$('report').style.display='none';
+  $('input-area').style.display='';
+  $('url').value='';$('json').value='';
+  $('err').classList.remove('show');
+  window.scrollTo({top:0,behavior:'smooth'});
+  $('url').focus();
+}
+
+async function run(){
+  $('err').classList.remove('show');$('report').innerHTML='';$('report').style.display='none';
+  $('btn').disabled=true;$('loading').classList.add('show');
+  try{
+    const state=await getState();
+    const graphUrl=$('url').value.trim()||null;
+    const a=analyze(state);
+    $('input-area').style.display='none';
+    $('report').innerHTML=`<a href="#" onclick="resetForm();return false" style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.85rem;color:var(--accent);text-decoration:none;margin-bottom:1.25rem;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">&larr; Analyze another graph</a>`+genReport(a,graphUrl);
+    $('report').style.display='block';
+    window.scrollTo({top:0,behavior:'smooth'});
+    setTimeout(drawConceptMap,80);
+    $('tree-lookup')?.addEventListener('keydown',e=>{if(e.key==='Enter')lookupExpr()});
+  }catch(e){
+    const el=$('err');el.textContent=e.message||'An error occurred.';el.classList.add('show');
+  }finally{$('btn').disabled=false;$('loading').classList.remove('show')}
+}
+$('url').addEventListener('keydown',e=>{if(e.key==='Enter')run()});
+</script>
+</body>
+</html>
