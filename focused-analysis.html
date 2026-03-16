@@ -733,7 +733,69 @@ function genInteractableSection(a){
   return h;
 }
 
-/* ═══════ SECTION 4: DEPENDENCY CONCEPT MAP ═══════ */
+/* ═══════ SECTION 5: UNUSED EXPRESSIONS ═══════ */
+
+function findUnused(a){
+  const unused=[];
+  for(const e of a.exprs){
+    const p=e.p;if(!p?.name)continue;
+    if(p.type==='action')continue;
+    const depBy=a.dep.by[p.name];
+    if(depBy&&depBy.size>0)continue;
+    if(e.slider||e.drag==='XY'||e.isMovPt)continue;
+    const isPlotted=!p.isFunc&&(p.type==='display'||(p.refs&&p.refs.size>0&&!p.rhs));
+    if(isPlotted)continue;
+    const cost=eCost(p);
+    const dependsOn=[...(a.dep.on[p.name]||[])];
+    unused.push({name:p.name,cost,latex:e.latex,isFunc:!!p.isFunc,hidden:!!e.hidden,dependsOn});
+  }
+  unused.sort((a,b)=>b.cost-a.cost);
+  return unused;
+}
+
+function genUnusedSection(a){
+  const unused=findUnused(a);
+  const totalCost=unused.reduce((s,u)=>s+u.cost,0);
+
+  let h=`<section id="sec-unused"><h2><span class="section-icon">&#128465;</span> Unused Expressions</h2>`;
+  h+=`<p class="desc">Named variables and functions that are defined but never referenced by any other expression in the graph. These consume computation without contributing to any output and can safely be removed or hidden.</p>`;
+
+  if(unused.length===0){
+    h+=`<div class="callout green"><strong>No unused expressions found.</strong> Every named definition is referenced by at least one other expression. The graph has no dead code.</div>`;
+    h+=`</section>`;
+    return h;
+  }
+
+  const sevClass=totalCost>30?'critical':totalCost>10?'high':totalCost>3?'medium':'low';
+  h+=`<div class="callout ${sevClass==='critical'||sevClass==='high'?'orange':'accent'}">`;
+  h+=`<strong>${unused.length} unused expression${unused.length>1?'s':''}</strong> found, consuming <strong>${totalCost.toFixed(1)}</strong> total cost. `;
+  if(totalCost>10) h+=`Removing these would noticeably improve performance.`;
+  else h+=`Impact is minor, but cleaning them up reduces clutter.`;
+  h+=`</div>`;
+
+  h+=`<div class="card open" id="card-unused"><div class="card-header" onclick="toggleCard('card-unused')"><h3>Unused Definitions (${unused.length}) &mdash; ${totalCost.toFixed(1)} wasted cost</h3>${chevSvg}</div><div class="card-body">`;
+  h+=`<table class="pattern-table"><thead><tr><th>Name</th><th>Type</th><th>Cost</th><th>Depends On</th><th>LaTeX</th></tr></thead><tbody>`;
+
+  for(const u of unused.slice(0,40)){
+    const cc=u.cost>8?'var(--red)':u.cost>3?'var(--orange)':'var(--text-muted)';
+    const type=u.isFunc?'function':'variable';
+    const deps=u.dependsOn.length>0?u.dependsOn.slice(0,4).map(d=>ei(d)).join(', ')+(u.dependsOn.length>4?' +<span style="opacity:0.6">'+(u.dependsOn.length-4)+' more</span>':''):'<span style="color:var(--text-muted);font-style:italic">none</span>';
+    h+=`<tr${u.hidden?' style="opacity:0.5"':''}>`;
+    h+=`<td>${ei(u.name)}${u.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
+    h+=`<td><span class="badge" style="font-size:0.7rem;background:var(--surface)">${type}</span></td>`;
+    h+=`<td style="font-family:var(--mono);color:${cc}">${u.cost.toFixed(1)}</td>`;
+    h+=`<td style="font-size:0.78rem">${deps}</td>`;
+    h+=`<td>${latexEl(u.latex,120)}</td>`;
+    h+=`</tr>`;
+  }
+  if(unused.length>40) h+=`<tr><td colspan="5" style="text-align:center;color:var(--text-muted);font-size:0.8rem">…and ${unused.length-40} more</td></tr>`;
+  h+=`</tbody></table></div></div>`;
+
+  h+=`</section>`;
+  return h;
+}
+
+/* ═══════ SECTION 6: DEPENDENCY CONCEPT MAP ═══════ */
 function computeLayers(dep){
   const rank={},computing=new Set();
   function cr(n){
@@ -834,10 +896,13 @@ function genReport(a,graphUrl){
   html+=`<header><h1>Focused Graph Analysis</h1><p class="subtitle">Performance diagnostics${urlLink}</p></header>`;
 
   const heavyCount=a.exprs.filter(e=>eCost(e.p)>=COST_THRESHOLD).length;
+  const unusedList=findUnused(a);
+  const unusedCount=unusedList.length;
   const stats=[
     {v:a.m.expr,l:'Total Expressions',c:'accent'},
     {v:heavyCount,l:'Heavy Expressions',c:heavyCount>5?'red':heavyCount>0?'orange':'teal'},
     {v:a.interactables.length,l:'Interactive Elements',c:a.interactables.length>3?'orange':'teal'},
+    {v:unusedCount,l:'Unused Definitions',c:unusedCount>5?'orange':unusedCount>0?'yellow':'green'},
     {v:a.m.fn,l:'Custom Functions',c:'accent'}
   ];
   html+=`<div class="summary-grid">${stats.map(s=>`<div class="stat-card ${s.c}"><div class="value">${s.v}</div><div class="label">${H(s.l)}</div></div>`).join('')}</div>`;
@@ -846,12 +911,14 @@ function genReport(a,graphUrl){
   html+=`<a href="#sec-heavy"><span class="num">1</span> Heavy Expressions</a>`;
   html+=`<a href="#sec-reuse"><span class="num">2</span> Reusable Patterns</a>`;
   html+=`<a href="#sec-interact"><span class="num">3</span> Interactive Dependencies</a>`;
-  html+=`<a href="#sec-tree"><span class="num">4</span> Dependency Concept Map</a>`;
+  html+=`<a href="#sec-unused"><span class="num">4</span> Unused Expressions</a>`;
+  html+=`<a href="#sec-tree"><span class="num">5</span> Dependency Concept Map</a>`;
   html+=`</div>`;
 
   html+=genHeavySection(a);
   html+=genReusableSection(a);
   html+=genInteractableSection(a);
+  html+=genUnusedSection(a);
   html+=genFullTreeSection(a);
 
   html+=`<footer>Focused Graph Analysis &middot; <a href="analysis2.html">General Analyzer v2</a> &middot; <a href="cost-analysis.html">Cost Methodology</a> &middot; <a href="compare.html">Graph Comparator</a></footer>`;
