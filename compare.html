@@ -294,41 +294,15 @@ function extractHash(url) {
   return m ? m[1] : null;
 }
 
-/* ── Graph Fetching ── */
-const PROXIES = [
-  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
-  u => 'https://corsproxy.io/?' + encodeURIComponent(u),
-];
-
-async function fetchViaProxy(url) {
-  for (const mkProxy of PROXIES) {
-    try {
-      const r = await fetch(mkProxy(url), { signal: AbortSignal.timeout(12000) });
-      if (r.ok) return await r.text();
-    } catch {}
-  }
-  return null;
-}
-
+/* ── Graph Fetching (direct Desmos API with Accept: application/json) ── */
 async function fetchGraphState(hash) {
-  const pageUrl = 'https://www.desmos.com/calculator/' + hash;
-  const html = await fetchViaProxy(pageUrl);
-  if (!html) return null;
-
-  const m = html.match(/data-load-data="([^"]+)"/);
-  if (!m) return null;
-
-  const decoded = m[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&');
-  let loadData;
-  try { loadData = JSON.parse(decoded); } catch { return null; }
-
-  const stateUrl = loadData?.graph?.stateUrl;
-  if (!stateUrl) return null;
-
-  const stateText = await fetchViaProxy(stateUrl);
-  if (!stateText) return null;
-
-  try { return JSON.parse(stateText); } catch { return null; }
+  const r = await fetch('https://www.desmos.com/calculator/' + hash, {
+    headers: { 'Accept': 'application/json' },
+    signal: AbortSignal.timeout(15000)
+  });
+  if (!r.ok) return null;
+  const data = await r.json();
+  return data?.state || data;
 }
 
 async function getGraphState(urlInputId, jsonInputId) {
@@ -342,7 +316,7 @@ async function getGraphState(urlInputId, jsonInputId) {
   if (!hash) throw new Error('Could not parse a Desmos graph hash from: ' + url);
   const state = await fetchGraphState(hash);
   if (!state) throw new Error(
-    'Could not fetch graph "' + hash + '". CORS may be blocking the request. ' +
+    'Could not fetch graph "' + hash + '". ' +
     'Try pasting the JSON instead: open the graph, press F12, type Calc.getState() in the console, ' +
     'copy the result, and paste it in the JSON field.'
   );
