@@ -227,23 +227,42 @@
 <script>
 /* ═══════ UTILITIES ═══════ */
 const $=id=>document.getElementById(id);
-const H=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const H=s=>(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const T=(s,n)=>s.length>n?s.slice(0,n)+'…':s;
 const ei=s=>`<span class="expr-inline latex-render" data-latex="${H(s)}">${H(s)}</span>`;
-function latexEl(tex){
+function eiRef(name,line){return`<span class="expr-inline">${latexEl(name,line)}${line!=null?` <span style="color:var(--text-muted);font-size:0.8em">(line ${line})</span>`:''}</span>`;}
+function latexEl(tex,line){
+  if(tex==null)return'';
   const escaped=H(tex);
-  return`<span class="latex-render" data-latex="${escaped}">${escaped}</span>`;
+  const lineAttr=line!=null&&line!==''?` data-line="${H(String(line))}"`:'';
+  return`<span class="latex-render" data-latex="${escaped}"${lineAttr}>${escaped}</span>`;
+}
+function formatStyleInfo(e){
+  if(!e)return'';
+  const parts=[];
+  if(e.color)parts.push('color');
+  if(e.lineStyle)parts.push(`line:${e.lineStyle}`);
+  if(e.lineWidth!=null&&e.lineWidth!==undefined)parts.push(`width:${e.lineWidth}`);
+  if(e.lineOpacity!=null&&e.lineOpacity!==undefined)parts.push(`lineOpacity:${e.lineOpacity}`);
+  if(e.fillOpacity!=null&&e.fillOpacity!==undefined)parts.push(`fillOpacity:${e.fillOpacity}`);
+  if(e.fill!=null&&e.fill!==undefined)parts.push(`fill:${e.fill}`);
+  return parts.length?parts.join(' '):'';
+}
+function showLatexFallback(el,line){
+  el.textContent=line!=null&&line!==''?`See line ${line}`:'See expression';
+  el.style.fontFamily='var(--mono)';el.style.fontSize='0.75rem';el.style.wordBreak='break-all';
 }
 function renderAllLatex(root){
   function go(){
     (root||document).querySelectorAll('[data-latex]').forEach(el=>{
       if(el.dataset.rendered)return;
       const tex=el.dataset.latex;
+      const line=el.dataset.line||el.closest('tr')?.querySelector('td:first-child')?.textContent?.trim();
       try{
         katex.render(tex,el,{throwOnError:false,displayMode:false,maxSize:100,maxExpand:300,strict:false});
+        if(el.querySelector('.katex-error')){el.innerHTML='';showLatexFallback(el,line);}
       }catch(e){
-        el.textContent=tex.length>200?tex.slice(0,200)+'…':tex;
-        el.style.fontFamily='var(--mono)';el.style.fontSize='0.75rem';el.style.wordBreak='break-all';
+        el.innerHTML='';showLatexFallback(el,line);
       }
       el.dataset.rendered='1';
     });
@@ -253,6 +272,8 @@ function renderAllLatex(root){
 }
 const chevSvg='<svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4.47 5.47a.75.75 0 011.06 0L8 7.94l2.47-2.47a.75.75 0 111.06 1.06l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 010-1.06z"/></svg>';
 function toggleCard(id){document.getElementById(id).classList.toggle('open')}
+function revealMore(id){const c=document.getElementById(id);const p=c?.previousElementSibling;if(c)c.style.display='block';if(p?.classList?.contains('reveal-more-p'))p.style.display='none';if(c)renderAllLatex(c)}
+function revealMoreRows(id){const mr=document.getElementById(id);if(!mr)return;let n=mr.nextElementSibling;while(n&&n.tagName==='TR'&&n.classList.contains('reveal-row')){n.style.display='';n=n.nextElementSibling}mr.style.display='none';renderAllLatex(mr.closest('table'))}
 
 /* ═══════ FETCHING (shared with analysis2.html) ═══════ */
 async function fetchState(hash){
@@ -274,6 +295,7 @@ async function getState(){
 const BUILTINS=new Set('floor,ceil,mod,abs,sign,min,max,median,mean,total,length,count,join,sort,unique,for,with,polygon,distance,midpoint,rgb,hsv,cos,sin,tan,sec,csc,cot,arccos,arcsin,arctan,log,ln,exp,sqrt,nCr,nPr,stdev,var,cov,corr,random,normaldist,tdist,poissondist,binomialdist,uniformdist,pdf,cdf,inversecdf,histogram,boxplot,dotplot,width,height'.split(','));
 
 function findDefEq(l){let d=0,i=0;while(i<l.length){if(l.startsWith('\\left',i)){d++;i+=5;continue}if(l.startsWith('\\right',i)){d=Math.max(0,d-1);i+=6;continue}if(l[i]==='='&&d===0&&i>0&&!'<>!'.includes(l[i-1]))return i;i++}return -1}
+function findDefIneq(l){let d=0,i=0;while(i<l.length){if(l.startsWith('\\left',i)){d++;i+=5;continue}if(l.startsWith('\\right',i)){d=Math.max(0,d-1);i+=6;continue}if(d===0&&i>0){if(l.startsWith('\\geq',i)||l.startsWith('\\leq',i)||l.startsWith('\\neq',i))return{i,opLen:4};if(l.startsWith('\\ge',i)||l.startsWith('\\le',i)||l.startsWith('\\lt',i)||l.startsWith('\\gt',i)||l.startsWith('\\ne',i))return{i,opLen:3};if(l[i]==='<'||l[i]==='>')return{i,opLen:1}}i++}return null}
 
 function varTokens(l){
   const v=new Set();let m;
@@ -287,17 +309,19 @@ function varTokens(l){
 }
 
 function findFnCalls(latex){
-  const calls=[];const re=/([a-zA-Z](?:_\{[^}]+\})?)\\left\(/g;let m;
+  const calls=[];const re=/([a-zA-Z](?:_\{[^}]+\})?)(?:\\left\(|\()/g;let m;
   while((m=re.exec(latex))!==null){
     const fnName=m[1];
     if(BUILTINS.has(fnName)||BUILTINS.has(fnName.replace(/.*_\{|\}/g,'')))continue;
-    let depth=1,i=m.index+m[0].length,argStart=i,args=[];
+    const openLen=m[0].length;let depth=1,i=m.index+openLen,argStart=i,args=[];
     while(i<latex.length&&depth>0){
       if(latex.startsWith('\\left(',i)){depth++;i+=6;continue}
       if(latex.startsWith('\\left[',i)){depth++;i+=6;continue}
       if(latex.startsWith('\\left\\{',i)){depth++;i+=7;continue}
       if(latex.startsWith('\\right)',i)){depth--;if(depth===0){args.push(latex.slice(argStart,i));i+=7;break}i+=7;continue}
       if(latex.startsWith('\\right]',i)||latex.startsWith('\\right\\}',i)){depth--;i+=7;continue}
+      if(latex[i]==='('){depth++;i++;continue}
+      if(latex[i]===')'){depth--;if(depth===0){args.push(latex.slice(argStart,i));i++;break}i++;continue}
       if(latex[i]===','&&depth===1){args.push(latex.slice(argStart,i));argStart=i+1}
       i++;
     }
@@ -308,17 +332,21 @@ function findFnCalls(latex){
 
 function parseExpr(latex){
   if(!latex)return null;
-  const isAct=/[^<>!]\\to(?![a-z])/.test(latex)||latex.startsWith('\\to')||/^[a-zA-Z](?:_\{[^}]+\})?\\to/.test(latex);
-  if(isAct)return{type:'action',name:null,refs:varTokens(latex),latex,calls:findFnCalls(latex)};
+  const hasArrow=latex.includes('->')||/[^<>!]\\to(?![a-z])/.test(latex)||latex.startsWith('\\to')||/^[a-zA-Z](?:_\{[^}]+\})?\\to/.test(latex);
+  if(hasArrow)return{type:'action',name:null,refs:varTokens(latex),latex,calls:findFnCalls(latex)};
   const eq=findDefEq(latex);
-  if(eq===-1)return{type:'display',name:null,refs:varTokens(latex),latex,calls:findFnCalls(latex)};
-  const lhs=latex.slice(0,eq),rhs=latex.slice(eq+1);
+  let lhs,rhs;
+  if(eq>=0){lhs=latex.slice(0,eq);rhs=latex.slice(eq+1)}
+  else{const ineq=findDefIneq(latex);if(ineq){lhs=latex.slice(0,ineq.i);rhs=latex.slice(ineq.i+ineq.opLen)}else return{type:'display',name:null,refs:varTokens(latex),latex,calls:findFnCalls(latex)}}
   let name=null,params=[],isFunc=false,isRec=false;
   const fm=lhs.match(/^([a-zA-Z](?:_\{[^}]+\})?)\\left\(/);
   if(fm){name=fm[1];isFunc=true;const pi=lhs.slice(fm[0].length).replace(/\\right\)$/,'');params=[...varTokens(pi)];if(rhs.includes(name+'\\left(')||rhs.includes(name+'('))isRec=true}
   else{const vm=lhs.match(/^([a-zA-Z](?:_\{[^}]+\})?)/);if(vm)name=vm[1]}
   const refs=varTokens(rhs);params.forEach(p=>refs.delete(p));if(name)refs.delete(name);
-  return{type:isFunc?'function':'variable',name,refs,isFunc,isRec,params,latex,rhs,calls:findFnCalls(rhs)};
+  const refsAll=new Set([...varTokens(lhs),...varTokens(rhs)]);if(name)refsAll.delete(name);params.forEach(p=>refsAll.delete(p));
+  const refsOnlyXY=refsAll.size>0&&[...refsAll].every(v=>v==='x'||v==='y');
+  const isImplicit=!isFunc&&name&&((name==='y'||name==='x')||refsOnlyXY);
+  return{type:isFunc?'function':isImplicit?'implicit':'variable',name,refs,isFunc,isRec,isImplicit,params,latex,rhs,calls:findFnCalls(rhs)};
 }
 
 /* ═══════ DEPENDENCY GRAPH ═══════ */
@@ -328,6 +356,7 @@ function buildDeps(parsedList){
   for(const p of parsedList){
     if(!p?.name)continue;const d=new Set();
     for(const r of p.refs)if(def[r]&&r!==p.name)d.add(r);
+    if(p.calls)for(const c of p.calls)if(def[c.fn])d.add(c.fn);
     on[p.name]=d;
     for(const dep of d){if(!by[dep])by[dep]=new Set();by[dep].add(p.name)}
     if(p.calls)for(const c of p.calls){
@@ -336,6 +365,16 @@ function buildDeps(parsedList){
         callsTo[p.name].push({fn:c.fn,args:c.args,argVars:c.argVars});
         if(!calledBy[c.fn])calledBy[c.fn]=[];
         calledBy[c.fn].push({caller:p.name,args:c.args,argVars:c.argVars});
+        if(!by[c.fn])by[c.fn]=new Set();by[c.fn].add(p.name);
+      }
+    }
+  }
+  for(const p of parsedList){
+    if(p?.name||!p?.calls)continue;
+    for(const c of p.calls){
+      if(def[c.fn]){
+        if(!calledBy[c.fn])calledBy[c.fn]=[];
+        calledBy[c.fn].push({caller:'',args:c.args,argVars:c.argVars});
       }
     }
   }
@@ -347,7 +386,9 @@ function buildDeps(parsedList){
 
 /* ═══════ COST ESTIMATION (v2) ═══════ */
 function eCost(p){
-  if(!p)return 1;const l=p.latex||'';
+  if(!p)return 1;
+  if(p.name==='j_{uice}')return 0;
+  const l=p.latex||'';
   if(l.length>2000)return 1;
   let c=1;c+=l.length*0.003;
   if(p.isRec)c+=30;
@@ -369,15 +410,16 @@ function analyze(state){
   const m={expr:0,fold:0,img:0,slider:0,drag:0,movPt:0,rec:0,fn:0,integ:0,sumInt:0,rpt:0,listC:0,sum:0,poly:0,lgList:0};
 
   for(const it of items)if(it.type==='folder'){m.fold++;folders[it.id]={title:it.title||'',hidden:!!it.hidden}}
-  for(const it of items){
-    if(it.type!=='expression'||!it.latex)continue;
-    if(it.latex.includes('j_{uice}'))continue;
-    m.expr++;const l=it.latex;
+  const allItemsWithLine=items.map((it,idx)=>({...it,line:idx+1}));
+  items.forEach((it,idx)=>{
+    if(it.type!=='expression')return;
+    if((it.latex||'').includes('`'))return;
+    m.expr++;const l=it.latex||'';
     if(it.slider)m.slider++;if(it.dragMode==='XY')m.drag++;
     const isMovPt=/^[A-Z](?:_\{[^}]+\})?\s*=\s*\\left\(\s*-?[\d.]/.test(l);
     if(isMovPt)m.movPt++;
     if(l.length>2000)m.lgList++;
-    if(it.type==='image'){m.img++;continue}
+    if(it.type==='image'){m.img++;return}
     const hasSum=/\\sum|\\operatorname\{total\}/.test(l),hasInt=/\\int/.test(l);
     if(hasSum)m.sum++;if(hasInt)m.integ++;if(hasSum&&hasInt)m.sumInt++;
     if(/\\operatorname\{for\}/.test(l))m.listC++;
@@ -385,8 +427,12 @@ function analyze(state){
     if(/\\operatorname\{polygon\}/.test(l))m.poly++;
     const p=parseExpr(l);if(p?.isFunc)m.fn++;if(p?.isRec)m.rec++;
     parsed.push(p);
-    exprs.push({id:it.id,latex:l,fid:it.folderId,hidden:!!it.hidden,slider:!!it.slider,drag:it.dragMode,p,isMovPt});
-  }
+    const line=idx+1;
+    exprs.push({id:it.id,latex:l,fid:it.folderId,hidden:!!it.hidden,slider:!!it.slider,drag:it.dragMode,p,isMovPt,line,color:it.color,lineStyle:it.lineStyle,lineWidth:it.lineWidth,lineOpacity:it.lineOpacity,fillOpacity:it.fillOpacity,fill:it.fill,points:it.points,lines:it.lines,pointStyle:it.pointStyle,pointSize:it.pointSize});
+  });
+
+  const lineMap={};
+  for(const e of exprs)lineMap[e.p?.name||'#'+e.id]=e.line;
 
   const dep=buildDeps(parsed);
 
@@ -408,14 +454,14 @@ function analyze(state){
   const inputs=[];
   for(const n of dep.all){if(dep.on[n].size===0){
     const e=exprs.find(x=>x.p?.name===n);
-    const type=e?.slider?'slider':e?.drag==='XY'?'draggable':e?.isMovPt?'movable point':e?.p?.isFunc?'function':'constant';
+    const type=e?.slider?'slider':e?.drag==='XY'?'draggable':e?.isMovPt?'movable point':e?.p?.isFunc?'function':e?.p?.isImplicit?'implicit function':'constant';
     const aff=dep.trans(n);aff.delete(n);
     let cost=0;for(const a of aff)cost+=eCost(dep.def[a]);
     inputs.push({name:n,type,count:aff.size,cost,affected:aff});
   }}
   inputs.sort((a,b)=>b.cost-a.cost);
 
-  return{m,folders,exprs,parsed,dep,interactables,interactiveDownstream,inputs};
+  return{m,folders,exprs,parsed,dep,interactables,interactiveDownstream,inputs,lineMap,items,allItemsWithLine};
 }
 
 /* ═══════ SECTION 1: HEAVY EXPRESSIONS ═══════ */
@@ -485,35 +531,80 @@ function classifyHeavy(e,interactiveDownstream,dep){
 }
 
 function genHeavySection(a){
-  const heavy=a.exprs.filter(e=>eCost(e.p)>=COST_THRESHOLD).sort((x,y)=>eCost(y.p)-eCost(x.p));
-  if(heavy.length===0) return `<section id="sec-heavy"><h2><span class="section-icon">&#9888;&#65039;</span> Heavy Expressions</h2><div class="callout green"><strong>No computationally heavy expressions found.</strong>All expressions are below the cost threshold of ${COST_THRESHOLD}. This graph should perform well.</div></section>`;
+  const heavy=a.exprs.filter(e=>e.p?.name!=='j_{uice}'&&eCost(e.p)>=COST_THRESHOLD).sort((x,y)=>eCost(y.p)-eCost(x.p));
+  if(heavy.length===0) return `<section id="sec-heavy"><h2><span class="section-icon">&#9888;&#65039;</span> Heavy Expressions</h2><div class="callout green"><strong>No computationally heavy expressions found.</strong> All expressions are below the cost threshold of ${COST_THRESHOLD}.</div></section>`;
 
   let h=`<section id="sec-heavy"><h2><span class="section-icon">&#9888;&#65039;</span> Heavy Expressions</h2>`;
-  h+=`<p class="desc">${heavy.length} expression(s) exceed the cost threshold of ${COST_THRESHOLD}. Each is classified by whether its impact is on <span class="badge load" style="font-size:0.65rem">loading</span> the graph or on <span class="badge interact" style="font-size:0.65rem">interactivity</span> during use.</p>`;
+  h+=`<p class="desc">${heavy.length} expression(s) exceed the cost threshold of ${COST_THRESHOLD}. Polygon renderings are listed separately. Each is classified by whether its impact is on <span class="badge load" style="font-size:0.65rem">loading</span> the graph or on <span class="badge interact" style="font-size:0.65rem">interactivity</span> during use.</p>`;
 
-  for(const e of heavy.slice(0,25)){
+  function renderHeavyCard(e){
     const info=classifyHeavy(e,a.interactiveDownstream,a.dep);
     const cc=info.cost>20?'var(--red)':info.cost>8?'var(--orange)':'var(--yellow)';
     const impLabel=info.impact==='interact'?'Interactivity':info.impact==='load'?'Loading':'Both';
     const impClass=info.impact;
+    let card=`<div class="heavy-card">`;
+    const dispName=e.p?.name||'(display #'+e.id+')';
+    card+=`<div class="heavy-header"><span class="name" style="color:${cc}">${latexEl(dispName,e.line)}${e.line!=null?` <span style="color:var(--text-muted);font-size:0.8em">(line ${e.line})</span>`:''}</span>`;
+    card+=`<div class="badges"><span class="cost-pill" style="background:${cc.replace('var(--','rgba(').replace(')',',0.15)')};color:${cc}">${info.cost.toFixed(1)}</span>`;
+    card+=`<span class="badge ${impClass}">${impLabel}</span>`;
+    const styleStr=formatStyleInfo(e);
+    if(styleStr)card+=`<span class="badge" style="font-size:0.65rem;background:var(--surface)">${H(styleStr)}</span>`;
+    card+=`</div></div>`;
+    card+=`<div class="heavy-latex">${latexEl(e.latex,e.line)}</div>`;
+    card+=`<div class="heavy-why"><strong style="color:var(--text);font-size:0.82rem">Why it's heavy:</strong> ${info.patterns.join(', ')}. `;
+    if(info.impact==='interact') card+=`This expression recalculates every time a user drags or adjusts an interactive element, directly affecting frame rate.`;
+    else if(info.impact==='load') card+=`This expression computes when the graph loads or a static dependency changes. It does not recalculate during interaction, so it affects initial load time but not drag responsiveness.`;
+    else card+=`This expression is both expensive to compute initially and recalculates during interaction.`;
+    card+=`</div>`;
+    if(info.alts.length>0) card+=`<ul class="heavy-alts">${info.alts.map(alt=>`<li>${alt}</li>`).join('')}</ul>`;
+    card+=`</div>`;
+    return card;
+  }
 
-    h+=`<div class="heavy-card">`;
-    h+=`<div class="heavy-header"><span class="name" style="color:${cc}">${H(e.p?.name||'(display #'+e.id+')')}</span>`;
-    h+=`<div class="badges"><span class="cost-pill" style="background:${cc.replace('var(--','rgba(').replace(')',',0.15)')};color:${cc}">${info.cost.toFixed(1)}</span>`;
-    h+=`<span class="badge ${impClass}">${impLabel}</span></div></div>`;
-    h+=`<div class="heavy-latex">${latexEl(e.latex)}</div>`;
-    h+=`<div class="heavy-why"><strong style="color:var(--text);font-size:0.82rem">Why it's heavy:</strong> ${info.patterns.join(', ')}. `;
-    if(info.impact==='interact') h+=`This expression recalculates every time a user drags or adjusts an interactive element, directly affecting frame rate.`;
-    else if(info.impact==='load') h+=`This expression computes when the graph loads or a static dependency changes. It does not recalculate during interaction, so it affects initial load time but not drag responsiveness.`;
-    else h+=`This expression is both expensive to compute initially and recalculates during interaction.`;
-    h+=`</div>`;
-    if(info.alts.length>0){
-      h+=`<ul class="heavy-alts">${info.alts.map(a=>`<li>${a}</li>`).join('')}</ul>`;
-    }
+  for(const e of heavy.slice(0,25)) h+=renderHeavyCard(e);
+  if(heavy.length>25){
+    h+=`<p class="reveal-more-p" style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:0.5rem"><a href="#" onclick="revealMore('heavy-other-more');return false" style="color:var(--accent)">Show all ${heavy.length-25} more heavy expressions</a></p>`;
+    h+=`<div id="heavy-other-more" style="display:none">`;
+    for(const e of heavy.slice(25)) h+=renderHeavyCard(e);
     h+=`</div>`;
   }
-  if(heavy.length>25) h+=`<p style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:0.5rem">…and ${heavy.length-25} more heavy expressions</p>`;
   h+=`</section>`;
+  return h;
+}
+
+function findCustomFunctions(a){
+  return a.exprs.filter(e=>e.p?.isFunc).map(e=>({
+    cost:eCost(e.p),latex:e.latex,hidden:!!e.hidden,line:e.line,
+    dependsOn:e.p?.name?[...(a.dep.on[e.p.name]||[])]:(e.p?.refs?[...(e.p.refs||[])].filter(r=>a.dep.def[r]):[]),
+    name:e.p?.name,params:e.p?.params||[],isRec:!!e.p?.isRec,expr:e
+  })).sort((a,b)=>b.cost-a.cost);
+}
+
+function genCustomFunctionsSection(a){
+  const funcs=findCustomFunctions(a);
+  let h=`<section id="sec-custom-fns"><h2><span class="section-icon">&#128295;</span> Custom Functions</h2>`;
+  h+=`<p class="desc">User-defined functions (e.g. <code>f(x)=x^2</code>).</p>`;
+  if(funcs.length===0){
+    h+=`<div class="callout accent"><strong>No custom functions found.</strong></div>`;
+    h+=`</section>`;
+    return h;
+  }
+  const lm=a.lineMap||{};
+  h+=`<div class="card open" id="card-custom-fns"><div class="card-header" onclick="toggleCard('card-custom-fns')"><h3>Custom Functions (${funcs.length})</h3>${chevSvg}</div><div class="card-body">`;
+  h+=`<table class="pattern-table"><thead><tr><th>Line</th><th>Name</th><th>Cost</th><th>Depends On</th><th>LaTeX</th></tr></thead><tbody>`;
+  for(const u of funcs){
+    const cc=u.cost>8?'var(--red)':u.cost>3?'var(--orange)':'var(--text-muted)';
+    const deps=u.dependsOn.length>0?u.dependsOn.slice(0,4).map(d=>eiRef(d,lm[d])).join(', ')+(u.dependsOn.length>4?' +<span style="opacity:0.6">'+(u.dependsOn.length-4)+' more</span>':''):'<span style="color:var(--text-muted);font-style:italic">none</span>';
+    const recBadge=u.isRec?' <span class="badge" style="font-size:0.6rem;background:var(--orange)">recursive</span>':'';
+    h+=`<tr${u.hidden?' style="opacity:0.5"':''}>`;
+    h+=`<td style="font-family:var(--mono);color:var(--text-muted)">${u.line??'—'}</td>`;
+    h+=`<td>${u.name?eiRef(u.name,lm[u.name]):`<span style="font-style:italic">display #${u.expr.id}</span>`}${recBadge}${u.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
+    h+=`<td style="font-family:var(--mono);color:${cc}">${u.cost.toFixed(1)}</td>`;
+    h+=`<td style="font-size:0.78rem">${deps}</td>`;
+    h+=`<td>${latexEl(u.latex,u.line)}</td>`;
+    h+=`</tr>`;
+  }
+  h+=`</tbody></table></div></div></section>`;
   return h;
 }
 
@@ -668,7 +759,8 @@ function genReusableSection(a){
     h+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.35rem">`;
     h+=`<span style="flex:1">${latexEl(term)}</span>`;
     h+=`<span class="badge high" style="flex-shrink:0;margin-left:0.5rem">${ownerList.length}×</span></div>`;
-    h+=`<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem"><span class="badge" style="font-size:0.7rem;background:var(--surface);margin-right:0.4rem">${typeLabel}</span>Found in: ${ownerList.slice(0,6).map(n=>ei(n)).join(', ')}${ownerList.length>6?' <span style="opacity:0.6">+'+(ownerList.length-6)+' more</span>':''}</div>`;
+    const lm=a.lineMap||{};
+    h+=`<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem"><span class="badge" style="font-size:0.7rem;background:var(--surface);margin-right:0.4rem">${typeLabel}</span>Found in: ${ownerList.slice(0,6).map(n=>eiRef(n,lm[n])).join(', ')}${ownerList.length>6?' <span style="opacity:0.6">+'+(ownerList.length-6)+' more</span>':''}</div>`;
     h+=`<div style="font-size:0.78rem;color:var(--green);margin-top:0.3rem">→ Store as a named variable and reference it instead</div>`;
     h+=`</div>`;
   }
@@ -681,14 +773,15 @@ function genReusableSection(a){
 /* ═══════ TREE RENDERING ═══════ */
 let _tnId=0;
 
-function renderTree(name,dep,dir,visited,depth,maxDepth,maxChildren){
+function renderTree(name,dep,dir,visited,depth,maxDepth,maxChildren,lineMap){
   if(!dep.def[name])return'';
   const id='tn'+(_tnId++);
   const p=dep.def[name];const cost=eCost(p);
   const cc=cost>20?'red':cost>8?'orange':cost>3?'yellow':'text-muted';
   const children=dir==='down'?[...(dep.by[name]||[])]:[...(dep.on[name]||[])];
   children.sort((a,b)=>eCost(dep.def[b])-eCost(dep.def[a]));
-  if(visited.has(name))return`<li><span class="circ">↻ ${H(name)} (circular)</span></li>`;
+  const line=lineMap?.[name];
+  if(visited.has(name))return`<li><span class="circ">↻ ${latexEl(name,line)}${line!=null?` (line ${line})`:''} (circular)</span></li>`;
   const hasKids=children.length>0&&depth<maxDepth;
   const collapsed=depth>=2?' collapsed':'';
   let h=`<li id="${id}"${hasKids?` class="${collapsed.trim()}"`:''}>`;
@@ -696,16 +789,17 @@ function renderTree(name,dep,dir,visited,depth,maxDepth,maxChildren){
   if(hasKids)h+=`<span class="arrow">▼</span>`;
   else if(children.length>0&&depth>=maxDepth)h+=`<span class="arrow" style="opacity:0.3;font-size:0.6rem">⋯</span>`;
   else h+=`<span class="arrow" style="opacity:0.2">·</span>`;
-  h+=`<span class="nm" style="color:var(--${cc})">${latexEl(name)}</span>`;
+  h+=`<span class="nm" style="color:var(--${cc})">${latexEl(name,line)}${line!=null?` <span style="color:var(--text-muted);font-size:0.75em">(line ${line})</span>`:''}</span>`;
   h+=`<span class="ct" style="color:var(--${cc})">${cost.toFixed(1)}</span>`;
   if(p?.isFunc)h+=`<span class="tg" style="background:var(--accent-glow);color:var(--accent)">fn</span>`;
+  if(p?.isImplicit)h+=`<span class="tg" style="background:var(--teal-glow,var(--accent-glow));color:var(--teal,var(--accent))">implicit</span>`;
   if(p?.isRec)h+=`<span class="tg" style="background:var(--red-glow);color:var(--red)">rec</span>`;
   h+=`</span>`;
   if(hasKids){
     const nv=new Set(visited);nv.add(name);
     h+=`<ul>`;
     const shown=children.slice(0,maxChildren||20);
-    for(const c of shown)h+=renderTree(c,dep,dir,nv,depth+1,maxDepth,maxChildren);
+    for(const c of shown)h+=renderTree(c,dep,dir,nv,depth+1,maxDepth,maxChildren,lineMap);
     if(children.length>shown.length)h+=`<li><span class="circ">+${children.length-shown.length} more…</span></li>`;
     h+=`</ul>`;
   }
@@ -727,11 +821,12 @@ function genInteractableSection(a){
     const open=i===0?' open':'';
     const cid='card-ia'+i;
     h+=`<div class="card${open}" id="${cid}"><div class="card-header" onclick="toggleCard('${cid}')"><h3>`;
-    h+=`<span class="badge ${sevClass}">${ia.type}</span> ${ei(ia.name)} &mdash; ${ia.count} dependent(s), cost ${ia.cost.toFixed(1)}`;
+    const lm=a.lineMap||{};
+    h+=`<span class="badge ${sevClass}">${ia.type}</span> ${eiRef(ia.name,lm[ia.name])} &mdash; ${ia.count} dependent(s), cost ${ia.cost.toFixed(1)}`;
     h+=`</h3>${chevSvg}</div><div class="card-body">`;
-    h+=`<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem">When ${ei(ia.name)} changes, <strong>${ia.count}</strong> expression(s) recalculate with a total triggered cost of <strong style="color:${ia.cost>50?'var(--red)':ia.cost>20?'var(--orange)':'var(--green)'}">${ia.cost.toFixed(1)}</strong>.</div>`;
+    h+=`<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem">When ${eiRef(ia.name,lm[ia.name])} changes, <strong>${ia.count}</strong> expression(s) recalculate with a total triggered cost of <strong style="color:${ia.cost>50?'var(--red)':ia.cost>20?'var(--orange)':'var(--green)'}">${ia.cost.toFixed(1)}</strong>.</div>`;
     _tnId=0;
-    h+=`<div class="dep-tree"><ul>${renderTree(ia.name,a.dep,'down',new Set(),0,6,15)}</ul></div>`;
+    h+=`<div class="dep-tree"><ul>${renderTree(ia.name,a.dep,'down',new Set(),0,6,15,lm)}</ul></div>`;
     h+=`</div></div>`;
   }
   h+=`</section>`;
@@ -740,22 +835,313 @@ function genInteractableSection(a){
 
 /* ═══════ SECTION 5: UNUSED EXPRESSIONS ═══════ */
 
+function isNumericalConstant(latex){
+  if(!latex||typeof latex!=='string')return false;
+  const t=latex.trim();
+  if(/^-?\d*\.?\d+$/.test(t))return true;
+  if(/^\\pi$/.test(t))return true;
+  if(/^e$/.test(t))return true;
+  if(/^-?\\infty$/.test(t))return true;
+  if(/^\\frac\{-?\d+\}\{-?\d+\}$/.test(t))return true;
+  if(/^\\sqrt\{-?\d+\}$/.test(t))return true;
+  return false;
+}
+
+function hasTopLevelOp(rhs){
+  if(!rhs||typeof rhs!=='string')return false;
+  let d=0;
+  for(let i=0;i<rhs.length;i++){
+    if(rhs.startsWith('\\left',i)){d++;i+=4;continue}
+    if(rhs.startsWith('\\right',i)){d--;i+=5;continue}
+    if(rhs[i]==='{'||rhs[i]==='(')d++;
+    else if(rhs[i]==='}'||rhs[i]===')')d--;
+    else if(d===0&&/[+*\/^]/.test(rhs[i]))return true;
+    else if(d===0&&rhs[i]==='-'&&i>0){const prev=rhs[i-1];if(!/[+\-*\/^(,\s]/.test(prev))return true;}
+  }
+  return false;
+}
+
 function findUnused(a){
   const unused=[];
   for(const e of a.exprs){
-    const p=e.p;if(!p?.name)continue;
-    if(p.type==='action')continue;
-    const depBy=a.dep.by[p.name];
-    if(depBy&&depBy.size>0)continue;
-    if(e.slider||e.drag==='XY'||e.isMovPt)continue;
-    const isPlotted=!p.isFunc&&(p.type==='display'||(p.refs&&p.refs.size>0&&!p.rhs));
-    if(isPlotted)continue;
-    const cost=eCost(p);
-    const dependsOn=[...(a.dep.on[p.name]||[])];
-    unused.push({name:p.name,cost,latex:e.latex,isFunc:!!p.isFunc,hidden:!!e.hidden,dependsOn});
+    const p=e.p;
+    if(p?.name){
+      if(p.type==='action')continue;
+      if(p.isImplicit)continue;
+      if(e.latex&&e.latex.includes('\\operatorname{polygon}'))continue;
+      if(exprUsesColor(e))continue;
+      const depBy=a.dep.by[p.name];
+      if(depBy&&depBy.size>0)continue;
+      if(a.dep.calledBy[p.name]?.length)continue;
+      if(e.slider||e.drag==='XY'||e.isMovPt)continue;
+      const isPlotted=!p.isFunc&&(p.type==='display'||(p.refs&&p.refs.size>0&&!p.rhs));
+      if(isPlotted)continue;
+      const cost=eCost(p);
+      const dependsOn=[...(a.dep.on[p.name]||[])];
+      unused.push({kind:'unreferenced',name:p.name,cost,latex:e.latex,isFunc:!!p.isFunc,hidden:!!e.hidden,dependsOn,line:e.line});
+    }else if(p?.type==='display'&&isNumericalConstant(e.latex)){
+      const cost=eCost(p);
+      unused.push({kind:'inline_number',name:null,cost,latex:e.latex,isFunc:false,hidden:!!e.hidden,dependsOn:[],line:e.line});
+    }
   }
   unused.sort((a,b)=>b.cost-a.cost);
   return unused;
+}
+
+function findUnstoredCalls(a){
+  const calls=[];
+  for(const e of a.exprs){
+    const p=e.p;
+    if(p?.isImplicit)continue;
+    if(!p?.calls||p.calls.length===0)continue;
+    const rhs=p.rhs||e.latex;
+    const callStored=(p.name&&p.calls.length===1&&!hasTopLevelOp(rhs));
+    if(!callStored){
+      for(const c of p.calls){
+        if(c.fn==='j_{uice}'||!a.dep.def[c.fn])continue;
+        const callStr=c.fn+'('+c.args.map(x=>x.trim()).join(', ')+')';
+        const cost=eCost(a.dep.def[c.fn]);
+        calls.push({kind:'unstored_call',name:null,cost,latex:callStr,call:c,fn:c.fn,inExpr:p?.name||null,isFunc:false,hidden:!!e.hidden,dependsOn:[],line:e.line});
+      }
+    }
+  }
+  calls.sort((a,b)=>b.cost-a.cost);
+  return calls;
+}
+
+function findColorCalls(latex){
+  if(!latex)return[];
+  const calls=[];
+  const re=/(?:\\operatorname\{(rgb|hsv)\}|\b(rgb|hsv))[\s}]*(?:\\left\(|\()/gi;let m;
+  while((m=re.exec(latex))!==null){
+    const fn=(m[1]||m[2]).toLowerCase();
+    const openLen=m[0].length;let depth=1,i=m.index+openLen,argStart=i,args=[];
+    while(i<latex.length&&depth>0){
+      if(latex.startsWith('\\left(',i)){depth++;i+=6;continue}
+      if(latex.startsWith('\\left[',i)){depth++;i+=6;continue}
+      if(latex.startsWith('\\left\\{',i)){depth++;i+=7;continue}
+      if(latex.startsWith('\\right)',i)){depth--;if(depth===0){args.push(latex.slice(argStart,i));i+=7;break}i+=7;continue}
+      if(latex.startsWith('\\right]',i)||latex.startsWith('\\right\\}',i)){depth--;i+=7;continue}
+      if(latex[i]==='('){depth++;i++;continue}
+      if(latex[i]===')'){depth--;if(depth===0){args.push(latex.slice(argStart,i));i++;break}i++;continue}
+      if(latex[i]===','&&depth===1){args.push(latex.slice(argStart,i));argStart=i+1}
+      i++;
+    }
+    const argStr=args.map(a=>a.trim()).join(', ');
+    calls.push({fn,args:argStr,spec:fn+'('+argStr+')'});
+  }
+  return calls;
+}
+
+function exprUsesColor(e){
+  if(e.latex&&(e.latex.includes('rgb')||e.latex.includes('hsv'))){
+    const c=findColorCalls(e.latex);
+    if(c.length>0)return true;
+  }
+  return false;
+}
+
+function findImplicitFunctions(a){
+  return a.exprs.filter(e=>e.p?.isImplicit).map(e=>({
+    name:e.p.name,cost:eCost(e.p),latex:e.latex,hidden:!!e.hidden,
+    dependsOn:[...(a.dep.on[e.p.name]||[])],line:e.line
+  })).sort((a,b)=>b.cost-a.cost);
+}
+
+function genImplicitSection(a){
+  const impl=findImplicitFunctions(a);
+  let h=`<section id="sec-implicit"><h2><span class="section-icon">&#128202;</span> Implicit Functions</h2>`;
+  h+=`<p class="desc">Expressions of the form <code>y = ...</code> or <code>x = ...</code> that define implicit relationships (curves, vertical/horizontal lines). These are plotted directly by Desmos.</p>`;
+
+  if(impl.length===0){
+    h+=`<div class="callout accent"><strong>No implicit functions found.</strong> This graph has no <code>y=</code> or <code>x=</code> expressions.</div>`;
+    h+=`</section>`;
+    return h;
+  }
+
+  h+=`<div class="card open" id="card-implicit"><div class="card-header" onclick="toggleCard('card-implicit')"><h3>Implicit Functions (${impl.length})</h3>${chevSvg}</div><div class="card-body">`;
+  h+=`<table class="pattern-table"><thead><tr><th>Name</th><th>Cost</th><th>Depends On</th><th>LaTeX</th></tr></thead><tbody>`;
+
+  const lm=a.lineMap||{};
+  for(const u of impl){
+    const cc=u.cost>8?'var(--red)':u.cost>3?'var(--orange)':'var(--text-muted)';
+    const deps=u.dependsOn.length>0?u.dependsOn.slice(0,4).map(d=>eiRef(d,lm[d])).join(', ')+(u.dependsOn.length>4?' +<span style="opacity:0.6">'+(u.dependsOn.length-4)+' more</span>':''):'<span style="color:var(--text-muted);font-style:italic">none</span>';
+    h+=`<tr${u.hidden?' style="opacity:0.5"':''}>`;
+    h+=`<td>${eiRef(u.name,lm[u.name])}${u.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
+    h+=`<td style="font-family:var(--mono);color:${cc}">${u.cost.toFixed(1)}</td>`;
+    h+=`<td style="font-size:0.78rem">${deps}</td>`;
+    h+=`<td>${latexEl(u.latex,u.line)}</td>`;
+    h+=`</tr>`;
+  }
+  h+=`</tbody></table></div></div></section>`;
+  return h;
+}
+
+function findActions(a){
+  return a.exprs.filter(e=>e.p?.type==='action').map(e=>({
+    cost:eCost(e.p),latex:e.latex,hidden:!!e.hidden,line:e.line,refs:[...(e.p?.refs||[])],expr:e
+  }));
+}
+
+function genActionsSection(a){
+  const actions=findActions(a);
+  let h=`<section id="sec-actions"><h2><span class="section-icon">&#10148;</span> Actions</h2>`;
+  h+=`<p class="desc">Expressions containing an arrow (<code>→</code> or <code>-&gt;</code>) that define Computation Layer actions. These run when triggered by button clicks, graph changes, or other events.</p>`;
+
+  if(actions.length===0){
+    h+=`<div class="callout accent"><strong>No actions found.</strong> This graph has no expressions with arrows.</div>`;
+    h+=`</section>`;
+    return h;
+  }
+
+  const lm=a.lineMap||{};
+  h+=`<div class="card open" id="card-actions"><div class="card-header" onclick="toggleCard('card-actions')"><h3>Actions (${actions.length})</h3>${chevSvg}</div><div class="card-body">`;
+  h+=`<table class="pattern-table"><thead><tr><th>Line</th><th>Cost</th><th>Style</th><th>LaTeX</th></tr></thead><tbody>`;
+  for(const u of actions){
+    const cc=u.cost>8?'var(--red)':u.cost>3?'var(--orange)':'var(--text-muted)';
+    const styleStr=formatStyleInfo(u.expr);
+    h+=`<tr${u.hidden?' style="opacity:0.5"':''}>`;
+    h+=`<td style="font-family:var(--mono);color:var(--text-muted)">${u.line??'—'}</td>`;
+    h+=`<td style="font-family:var(--mono);color:${cc}">${u.cost.toFixed(1)}</td>`;
+    h+=`<td style="font-size:0.72rem;color:var(--text-muted)">${styleStr?H(styleStr):'—'}</td>`;
+    h+=`<td>${latexEl(u.latex,u.line)}${u.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
+    h+=`</tr>`;
+  }
+  h+=`</tbody></table></div></div></section>`;
+  return h;
+}
+
+function findOtherItems(a){
+  const exprIdsInSection=new Set();
+  for(const e of a.exprs)if(e.p?.name&&a.dep.all.has(e.p.name))exprIdsInSection.add(e.id);
+  for(const e of a.exprs)if(eCost(e.p)>=COST_THRESHOLD)exprIdsInSection.add(e.id);
+  for(const e of a.exprs)if(e.p?.isFunc)exprIdsInSection.add(e.id);
+  for(const ia of a.interactables)if(ia.expr)exprIdsInSection.add(ia.expr.id);
+  for(const e of a.exprs)if(e.p?.isImplicit)exprIdsInSection.add(e.id);
+  for(const e of a.exprs)if(e.p?.type==='action')exprIdsInSection.add(e.id);
+  const unused=findUnused(a);
+  for(const u of unused){
+    if(u.name){const e=a.exprs.find(x=>x.p?.name===u.name);if(e)exprIdsInSection.add(e.id);}
+    else{const e=a.exprs.find(x=>x.p?.type==='display'&&isNumericalConstant(x.latex)&&x.line===u.line);if(e)exprIdsInSection.add(e.id);}
+  }
+  for(const e of a.exprs){
+    const p=e.p;
+    if(!p?.calls||p.calls.length===0)continue;
+    const rhs=p.rhs||e.latex;
+    const callStored=p.name&&p.calls.length===1&&!hasTopLevelOp(rhs);
+    if(!callStored){
+      for(const c of p.calls){
+        if(a.dep.def[c.fn]){exprIdsInSection.add(e.id);break;}
+      }
+    }
+  }
+  const reusable=findReusableExpressions(a.exprs,a.dep);
+  for(const[,owners]of reusable){
+    for(const o of owners){
+      if(o.startsWith('#')){const id=parseInt(o.slice(1),10);if(!isNaN(id))exprIdsInSection.add(id);}
+      else{const e=a.exprs.find(x=>x.p?.name===o);if(e)exprIdsInSection.add(e.id);}
+    }
+  }
+  const otherExprs=a.exprs.filter(e=>!exprIdsInSection.has(e.id)&&e.latex&&String(e.latex).trim());
+  const allItems=a.allItemsWithLine||a.items?.map((it,i)=>({...it,line:i+1}))||[];
+  const otherNonExprs=allItems.filter(it=>it.type!=='expression'&&it.type!=='folder'&&it.type!=='text');
+  const result=[];
+  for(const e of otherExprs)result.push({kind:'expr',expr:e,line:e.line});
+  for(const it of otherNonExprs)result.push({kind:'item',item:it,line:it.line});
+  result.sort((a,b)=>(b.line??999)-(a.line??999));
+  return result;
+}
+
+function genOtherExpressionsSection(a){
+  const other=findOtherItems(a);
+  const lm=a.lineMap||{};
+  let h=`<section id="sec-other"><h2><span class="section-icon">&#128196;</span> Other Items</h2>`;
+  h+=`<p class="desc">Expressions and items that do not fit into the categories above: referenced definitions, display expressions, images, tables, and other graph lines not classified elsewhere.</p>`;
+  if(other.length===0){
+    h+=`<div class="callout green"><strong>Every line is covered by the sections above.</strong></div>`;
+    h+=`</section>`;return h;
+  }
+  h+=`<div class="card open" id="card-other"><div class="card-header" onclick="toggleCard('card-other')"><h3>Other Items (${other.length})</h3>${chevSvg}</div><div class="card-body">`;
+  h+=`<table class="pattern-table"><thead><tr><th>Line</th><th>Type</th><th>Name / Expression</th><th>Cost</th><th>Depends On</th><th>Style</th><th>LaTeX / Details</th></tr></thead><tbody>`;
+  for(const o of other){
+    if(o.kind==='expr'){
+      const e=o.expr;
+      const cost=eCost(e.p);
+      const cc=cost>8?'var(--red)':cost>3?'var(--orange)':'var(--text-muted)';
+      const deps=e.p?.name?[...(a.dep.on[e.p.name]||[])]:(e.p?.refs?[...(e.p.refs||[])].filter(r=>a.dep.def[r]):[]);
+      const depsStr=deps.length>0?deps.slice(0,4).map(d=>eiRef(d,lm[d])).join(', ')+(deps.length>4?' +<span style="opacity:0.6">'+(deps.length-4)+' more</span>':''):'<span style="color:var(--text-muted);font-style:italic">none</span>';
+      const styleStr=formatStyleInfo(e);
+      h+=`<tr${e.hidden?' style="opacity:0.5"':''}>`;
+      h+=`<td style="font-family:var(--mono);color:var(--text-muted)">${o.line??'—'}</td>`;
+      h+=`<td><span class="badge" style="font-size:0.7rem;background:var(--surface)">expression</span></td>`;
+      h+=`<td>${e.p?.name?eiRef(e.p.name,lm[e.p.name]):`<span style="font-style:italic">display #${e.id}</span>`}${e.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
+      h+=`<td style="font-family:var(--mono);color:${cc}">${cost.toFixed(1)}</td>`;
+      h+=`<td style="font-size:0.78rem">${depsStr}</td>`;
+      h+=`<td style="font-size:0.72rem;color:var(--text-muted)">${styleStr?H(styleStr):'—'}</td>`;
+      h+=`<td>${latexEl(e.latex||'(empty)',e.line)}</td>`;
+      h+=`</tr>`;
+    }else{
+      const it=o.item;
+      const typeLabel=it.type||'item';
+      const desc=it.type==='image'?(it.image_url?'Image':''):it.type==='table'?('Table'+(it.columns?.length?` (${it.columns.length} cols)`:'')):it.type==='folder'?(it.title||'Folder'):(it.latex?latexEl(it.latex,it.line):typeLabel);
+      const styleStr=formatStyleInfo(it);
+      h+=`<tr${it.hidden?' style="opacity:0.5"':''}>`;
+      h+=`<td style="font-family:var(--mono);color:var(--text-muted)">${o.line??'—'}</td>`;
+      h+=`<td><span class="badge" style="font-size:0.7rem;background:var(--surface)">${H(typeLabel)}</span></td>`;
+      h+=`<td>${it.title?H(it.title):'—'}${it.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
+      h+=`<td>—</td><td>—</td>`;
+      h+=`<td style="font-size:0.72rem;color:var(--text-muted)">${styleStr?H(styleStr):'—'}</td>`;
+      h+=`<td>${desc}</td>`;
+      h+=`</tr>`;
+    }
+  }
+  h+=`</tbody></table></div></div></section>`;
+  return h;
+}
+
+function genUnstoredCallsSection(a){
+  const calls=findUnstoredCalls(a);
+  const totalCost=calls.reduce((s,u)=>s+u.cost,0);
+
+  let h=`<section id="sec-unstored-calls"><h2><span class="section-icon">&#128260;</span> Unstored Function Calls</h2>`;
+  h+=`<p class="desc">Function calls whose result is not stored in a variable (e.g. <code>f(x)</code> used inline in <code>y = f(x) + 1</code>). Each occurrence recomputes the function. Storing the result in a variable (e.g. <code>a = f(x)</code>, then <code>y = a + 1</code>) can improve performance when the call is expensive or repeated.</p>`;
+
+  if(calls.length===0){
+    h+=`<div class="callout green"><strong>No unstored function calls found.</strong> Every function call result is stored in a variable.</div>`;
+    h+=`</section>`;
+    return h;
+  }
+
+  const sevClass=totalCost>30?'critical':totalCost>10?'high':totalCost>3?'medium':'low';
+  h+=`<div class="callout ${sevClass==='critical'||sevClass==='high'?'orange':'accent'}">`;
+  h+=`<strong>${calls.length} unstored call${calls.length>1?'s':''}</strong> found, consuming <strong>${totalCost.toFixed(1)}</strong> total cost. `;
+  if(totalCost>10) h+=`Storing these in variables would noticeably improve performance.`;
+  else h+=`Impact is minor, but storing results can reduce redundant computation.`;
+  h+=`</div>`;
+
+  h+=`<div class="card open" id="card-unstored-calls"><div class="card-header" onclick="toggleCard('card-unstored-calls')"><h3>Unstored Calls (${calls.length}) &mdash; ${totalCost.toFixed(1)} cost</h3>${chevSvg}</div><div class="card-body">`;
+  h+=`<table class="pattern-table"><thead><tr><th>Call</th><th>In Expression</th><th>Cost</th><th>Depends On</th><th>LaTeX</th></tr></thead><tbody>`;
+
+  const lm=a.lineMap||{};
+  const LIM=40;
+  for(let i=0;i<calls.length;i++){
+    const u=calls[i];
+    const hidden=i>=LIM;
+    const cc=u.cost>8?'var(--red)':u.cost>3?'var(--orange)':'var(--text-muted)';
+    const argVars=u.call?.argVars?[...new Set(u.call.argVars.flat())]:[];
+    const deps=argVars.length>0?argVars.slice(0,4).map(v=>eiRef(v,lm[v])).join(', ')+(argVars.length>4?' +<span style="opacity:0.6">'+(argVars.length-4)+' more</span>':''):'<span style="color:var(--text-muted);font-style:italic">none</span>';
+    const trStyle=hidden?'display:none':(u.hidden?'opacity:0.5':'');
+    if(i===LIM) h+=`<tr id="unstored-more-row" class="reveal-more-p"><td colspan="5" style="text-align:center;color:var(--text-muted);font-size:0.8rem"><a href="#" onclick="revealMoreRows('unstored-more-row');return false" style="color:var(--accent)">Show all ${calls.length-LIM} more</a></td></tr>`;
+    h+=`<tr${hidden?' class="reveal-row"':''}${trStyle?' style="'+trStyle+'"':''}>`;
+    h+=`<td>${latexEl(u.latex,u.line)}${u.line!=null?` <span style="color:var(--text-muted);font-size:0.8em">(line ${u.line})</span>`:''}</td>`;
+    h+=`<td>${u.inExpr?eiRef(u.inExpr,lm[u.inExpr]):'<span style="color:var(--text-muted);font-style:italic">Unstored</span>'}</td>`;
+    h+=`<td style="font-family:var(--mono);color:${cc}">${u.cost.toFixed(1)}</td>`;
+    h+=`<td style="font-size:0.78rem">${deps}</td>`;
+    h+=`<td>${latexEl(u.latex,u.line)}</td>`;
+    h+=`</tr>`;
+  }
+  h+=`</tbody></table></div></div></section>`;
+  return h;
 }
 
 function genUnusedSection(a){
@@ -763,10 +1149,10 @@ function genUnusedSection(a){
   const totalCost=unused.reduce((s,u)=>s+u.cost,0);
 
   let h=`<section id="sec-unused"><h2><span class="section-icon">&#128465;</span> Unused Expressions</h2>`;
-  h+=`<p class="desc">Named variables and functions that are defined but never referenced by any other expression in the graph. These consume computation without contributing to any output and can safely be removed or hidden.</p>`;
+  h+=`<p class="desc">Named variables and functions that are defined but never referenced; and numerical values (e.g. <code>5</code>, <code>\\pi</code>) displayed without being stored. These can be removed or consolidated into variables for reuse.</p>`;
 
   if(unused.length===0){
-    h+=`<div class="callout green"><strong>No unused expressions found.</strong> Every named definition is referenced by at least one other expression. The graph has no dead code.</div>`;
+    h+=`<div class="callout green"><strong>No unused expressions found.</strong> Every named definition is referenced and no inline numerical values.</div>`;
     h+=`</section>`;
     return h;
   }
@@ -779,21 +1165,32 @@ function genUnusedSection(a){
   h+=`</div>`;
 
   h+=`<div class="card open" id="card-unused"><div class="card-header" onclick="toggleCard('card-unused')"><h3>Unused Definitions (${unused.length}) &mdash; ${totalCost.toFixed(1)} wasted cost</h3>${chevSvg}</div><div class="card-body">`;
-  h+=`<table class="pattern-table"><thead><tr><th>Name</th><th>Type</th><th>Cost</th><th>Depends On</th><th>LaTeX</th></tr></thead><tbody>`;
+  h+=`<table class="pattern-table"><thead><tr><th>Name / Value</th><th>Type</th><th>Cost</th><th>Depends On</th><th>Style</th><th>LaTeX</th></tr></thead><tbody>`;
 
-  for(const u of unused.slice(0,40)){
+  const LIM=40;
+  for(let i=0;i<unused.length;i++){
+    const u=unused[i];
+    const hidden=i>=LIM;
     const cc=u.cost>8?'var(--red)':u.cost>3?'var(--orange)':'var(--text-muted)';
-    const type=u.isFunc?'function':'variable';
-    const deps=u.dependsOn.length>0?u.dependsOn.slice(0,4).map(d=>ei(d)).join(', ')+(u.dependsOn.length>4?' +<span style="opacity:0.6">'+(u.dependsOn.length-4)+' more</span>':''):'<span style="color:var(--text-muted);font-style:italic">none</span>';
-    h+=`<tr${u.hidden?' style="opacity:0.5"':''}>`;
-    h+=`<td>${ei(u.name)}${u.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
+    const type=u.kind==='inline_number'?'inline number':u.isFunc?'function':'variable';
+    const lm=a.lineMap||{};
+    const deps=u.dependsOn.length>0?u.dependsOn.slice(0,4).map(d=>eiRef(d,lm[d])).join(', ')+(u.dependsOn.length>4?' +<span style="opacity:0.6">'+(u.dependsOn.length-4)+' more</span>':''):'<span style="color:var(--text-muted);font-style:italic">none</span>';
+    const expr=u.name?a.exprs.find(x=>x.p?.name===u.name):a.exprs.find(x=>x.p?.type==='display'&&isNumericalConstant(x.latex)&&x.line===u.line);
+    const styleStr=formatStyleInfo(expr);
+    let nameCell;
+    if(u.name)nameCell=eiRef(u.name,lm[u.name]);
+    else nameCell=`${latexEl(u.latex,u.line)}${u.line!=null?` <span style="color:var(--text-muted);font-size:0.8em">(line ${u.line})</span>`:''}`;
+    const trStyle=hidden?'display:none':(u.hidden?'opacity:0.5':'');
+    if(i===LIM) h+=`<tr id="unused-more-row" class="reveal-more-p"><td colspan="6" style="text-align:center;color:var(--text-muted);font-size:0.8rem"><a href="#" onclick="revealMoreRows('unused-more-row');return false" style="color:var(--accent)">Show all ${unused.length-LIM} more</a></td></tr>`;
+    h+=`<tr${hidden?' class="reveal-row"':''}${trStyle?' style="'+trStyle+'"':''}>`;
+    h+=`<td>${nameCell}${u.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
     h+=`<td><span class="badge" style="font-size:0.7rem;background:var(--surface)">${type}</span></td>`;
     h+=`<td style="font-family:var(--mono);color:${cc}">${u.cost.toFixed(1)}</td>`;
     h+=`<td style="font-size:0.78rem">${deps}</td>`;
-    h+=`<td>${latexEl(u.latex)}</td>`;
+    h+=`<td style="font-size:0.72rem;color:var(--text-muted)">${styleStr?H(styleStr):'—'}</td>`;
+    h+=`<td>${latexEl(u.latex,u.line)}</td>`;
     h+=`</tr>`;
   }
-  if(unused.length>40) h+=`<tr><td colspan="5" style="text-align:center;color:var(--text-muted);font-size:0.8rem">…and ${unused.length-40} more</td></tr>`;
   h+=`</tbody></table></div></div>`;
 
   h+=`</section>`;
@@ -875,13 +1272,15 @@ function genFullTreeSection(a){
     });
     const label=layer===0?'Roots':layer===maxL?'Leaves':'L'+layer;
     h+=`<div class="map-layer"><span class="map-layer-label">${label}</span>`;
+    const lm=a.lineMap||{};
     for(const name of ln){
       const p=a.dep.def[name];const cost=eCost(p);const nc=nodeColor(cost);
       let tags='';
       if(p?.isFunc)tags+=`<span class="node-tag" style="background:var(--accent-glow);color:var(--accent)">fn</span>`;
+      if(p?.isImplicit)tags+=`<span class="node-tag" style="background:rgba(92,200,212,0.15);color:var(--teal)">implicit</span>`;
       if(p?.isRec)tags+=`<span class="node-tag" style="background:var(--red-glow);color:var(--red)">rec</span>`;
       const eName=name.replace(/'/g,"\\'");
-      h+=`<div class="map-node" data-name="${H(name)}" style="background:${nc.bg};border-color:${nc.border};color:${nc.text}" onclick="selectNode('${eName}')">${latexEl(name)} <span class="node-cost">${cost.toFixed(1)}</span>${tags}</div>`;
+      h+=`<div class="map-node" data-name="${H(name)}" style="background:${nc.bg};border-color:${nc.border};color:${nc.text}" onclick="selectNode('${eName}')">${latexEl(name,lm[name])}${lm[name]!=null?` <span style="color:var(--text-muted);font-size:0.75em">(line ${lm[name]})</span>`:''} <span class="node-cost">${cost.toFixed(1)}</span>${tags}</div>`;
     }
     h+=`</div>`;
   }
@@ -903,11 +1302,19 @@ function genReport(a,graphUrl){
   const heavyCount=a.exprs.filter(e=>eCost(e.p)>=COST_THRESHOLD).length;
   const unusedList=findUnused(a);
   const unusedCount=unusedList.length;
+  const unstoredCallsCount=findUnstoredCalls(a).length;
+  const implicitCount=findImplicitFunctions(a).length;
+  const actionsCount=findActions(a).length;
+  const otherCount=findOtherItems(a).length;
   const stats=[
     {v:a.m.expr,l:'Total Expressions',c:'accent'},
     {v:heavyCount,l:'Heavy Expressions',c:heavyCount>5?'red':heavyCount>0?'orange':'teal'},
     {v:a.interactables.length,l:'Interactive Elements',c:a.interactables.length>3?'orange':'teal'},
+    {v:implicitCount,l:'Implicit Functions',c:'teal'},
+    {v:actionsCount,l:'Actions',c:'teal'},
     {v:unusedCount,l:'Unused Definitions',c:unusedCount>5?'orange':unusedCount>0?'yellow':'green'},
+    {v:unstoredCallsCount,l:'Unstored Calls',c:unstoredCallsCount>5?'orange':unstoredCallsCount>0?'yellow':'green'},
+    {v:otherCount,l:'Other Items',c:'teal'},
     {v:a.m.fn,l:'Custom Functions',c:'accent'}
   ];
   html+=`<div class="summary-grid">${stats.map(s=>`<div class="stat-card ${s.c}"><div class="value">${s.v}</div><div class="label">${H(s.l)}</div></div>`).join('')}</div>`;
@@ -916,15 +1323,25 @@ function genReport(a,graphUrl){
   html+=`<a href="#sec-heavy"><span class="num">1</span> Heavy Expressions</a>`;
   html+=`<a href="#sec-reuse"><span class="num">2</span> Reusable Patterns</a>`;
   html+=`<a href="#sec-interact"><span class="num">3</span> Interactive Dependencies</a>`;
-  html+=`<a href="#sec-unused"><span class="num">4</span> Unused Expressions</a>`;
-  html+=`<a href="#sec-tree"><span class="num">5</span> Dependency Concept Map</a>`;
+  html+=`<a href="#sec-implicit"><span class="num">4</span> Implicit Functions</a>`;
+  html+=`<a href="#sec-custom-fns"><span class="num">5</span> Custom Functions</a>`;
+  html+=`<a href="#sec-actions"><span class="num">6</span> Actions</a>`;
+  html+=`<a href="#sec-unused"><span class="num">7</span> Unused Expressions</a>`;
+  html+=`<a href="#sec-unstored-calls"><span class="num">8</span> Unstored Function Calls</a>`;
+  html+=`<a href="#sec-tree"><span class="num">9</span> Dependency Concept Map</a>`;
+  html+=`<a href="#sec-other"><span class="num">10</span> Other Items</a>`;
   html+=`</div>`;
 
   html+=genHeavySection(a);
   html+=genReusableSection(a);
   html+=genInteractableSection(a);
+  html+=genImplicitSection(a);
+  html+=genCustomFunctionsSection(a);
+  html+=genActionsSection(a);
   html+=genUnusedSection(a);
+  html+=genUnstoredCallsSection(a);
   html+=genFullTreeSection(a);
+  html+=genOtherExpressionsSection(a);
 
   html+=`<footer>Focused Graph Analysis &middot; <a href="analysis2.html">General Analyzer v2</a> &middot; <a href="cost-analysis.html">Cost Methodology</a> &middot; <a href="compare.html">Graph Comparator</a></footer>`;
   return html;
@@ -994,21 +1411,26 @@ function showNodeDetail(name){
   const upAll=dep.transUp(name);upAll.delete(name);
   const dnAll=dep.trans(name);dnAll.delete(name);
 
+  const lm=_analysis?.lineMap||{};
   let h=`<div class="node-detail"><div class="nd-header">`;
   const sig=p.isFunc?name+'('+p.params.join(', ')+')':name;
-  h+=`<span class="nd-name" style="color:${cc}">${latexEl(sig)}</span>`;
+  h+=`<span class="nd-name" style="color:${cc}">${latexEl(sig,lm[name])}${lm[name]!=null?` <span style="color:var(--text-muted);font-size:0.8em">(line ${lm[name]})</span>`:''}</span>`;
   h+=`<div style="display:flex;align-items:center;gap:0.5rem">`;
   h+=`<span class="cost-pill" style="background:${cc.replace('var(--','rgba(').replace(')',',0.15)')};color:${cc}">${cost.toFixed(1)}</span>`;
   h+=`<button class="nd-close" onclick="clearSelection()" title="Clear selection">✕</button>`;
   h+=`</div></div>`;
-  if(p.latex)h+=`<div class="nd-latex">${latexEl(p.latex)}</div>`;
-  h+=`<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">Type: ${p.isFunc?'function':p.type||'variable'}${p.isRec?' (recursive)':''} &middot; Full upstream chain: ${upAll.size} &middot; Full downstream chain: ${dnAll.size}</div>`;
+  if(p.latex)h+=`<div class="nd-latex">${latexEl(p.latex,lm[name])}</div>`;
+  const typeLabel=p.isFunc?'function':p.type==='implicit'?'implicit function':p.type||'variable';
+  h+=`<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">Type: ${typeLabel}${p.isRec?' (recursive)':''} &middot; Full upstream chain: ${upAll.size} &middot; Full downstream chain: ${dnAll.size}</div>`;
+  const expr=_analysis.exprs?.find(x=>x.p?.name===name);
+  const styleStr=formatStyleInfo(expr);
+  if(styleStr)h+=`<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.25rem">Style: ${H(styleStr)}</div>`;
 
   h+=`<div class="nd-deps"><div class="nd-dep-col"><h5>↑ Depends on (${up.length})</h5>`;
   if(up.length>0){
     for(const u of up.slice(0,15)){
       const uc=eCost(dep.def[u]),ucc=uc>20?'var(--red)':uc>8?'var(--orange)':uc>3?'var(--yellow)':'var(--text-muted)';
-      h+=`<div class="nd-dep-item"><span class="expr-inline dep-link" onclick="selectNode('${u.replace(/'/g,"\\'")}')">${H(u)}</span><span class="dep-cost" style="color:${ucc}">${uc.toFixed(1)}</span></div>`;
+      h+=`<div class="nd-dep-item"><span class="expr-inline dep-link" onclick="selectNode('${u.replace(/'/g,"\\'")}')">${latexEl(u,lm[u])}${lm[u]!=null?` <span style="color:var(--text-muted);font-size:0.8em">(line ${lm[u]})</span>`:''}</span><span class="dep-cost" style="color:${ucc}">${uc.toFixed(1)}</span></div>`;
     }
     if(up.length>15)h+=`<div style="font-size:0.75rem;color:var(--text-muted)">+${up.length-15} more</div>`;
   } else h+=`<div style="font-size:0.78rem;color:var(--text-muted);font-style:italic">Root — no dependencies</div>`;
@@ -1018,7 +1440,7 @@ function showNodeDetail(name){
   if(dn.length>0){
     for(const d of dn.slice(0,15)){
       const dc=eCost(dep.def[d]),dcc=dc>20?'var(--red)':dc>8?'var(--orange)':dc>3?'var(--yellow)':'var(--text-muted)';
-      h+=`<div class="nd-dep-item"><span class="expr-inline dep-link" onclick="selectNode('${d.replace(/'/g,"\\'")}')">${H(d)}</span><span class="dep-cost" style="color:${dcc}">${dc.toFixed(1)}</span></div>`;
+      h+=`<div class="nd-dep-item"><span class="expr-inline dep-link" onclick="selectNode('${d.replace(/'/g,"\\'")}')">${latexEl(d,lm[d])}${lm[d]!=null?` <span style="color:var(--text-muted);font-size:0.8em">(line ${lm[d]})</span>`:''}</span><span class="dep-cost" style="color:${dcc}">${dc.toFixed(1)}</span></div>`;
     }
     if(dn.length>15)h+=`<div style="font-size:0.75rem;color:var(--text-muted)">+${dn.length-15} more</div>`;
   } else h+=`<div style="font-size:0.78rem;color:var(--text-muted);font-style:italic">Leaf — nothing depends on this</div>`;
