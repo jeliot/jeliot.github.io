@@ -488,133 +488,160 @@ function genHeavySection(a){
 /* ═══════ SECTION 2: REUSABLE SUB-EXPRESSIONS ═══════ */
 
 /*
-  Scan every expression's LaTeX for mathematical fragments that appear
-  verbatim in 2+ different expressions but are NOT already stored in
-  a named variable.  Two detection strategies:
+  Find complete evaluable expressions that produce a specific value,
+  appear in 2+ expressions, but are never stored in a named variable.
 
-  1. Repeated inline fragments — sliding-window scan of the RHS LaTeX
-     looking for substrings ≥ 20 chars that show up in multiple exprs.
-     Exclude any fragment that exactly equals a known variable's RHS
-     (since it's already stored).
-
-  2. Identical function calls — same function called with the same
-     arguments from multiple expressions, where the result is not
-     already cached in a variable.
+  Strategy: extract structurally complete sub-expressions from each
+  expression's RHS — function calls, \frac{…}{…}, \sqrt{…},
+  \operatorname{…}\left(…\right), and balanced \left(…\right) groups
+  that contain at least one operation — then count how many different
+  expressions contain each one.  Exclude any that already match a
+  named variable's definition.
 */
 
-function findRepeatedFragments(exprs,dep){
-  const MIN_LEN=20,MAX_LEN=120,STEP=4,MIN_OCCUR=2;
+function extractEvaluableTerms(latex){
+  const terms=new Set();
+  if(!latex||latex.length>2000)return terms;
 
-  const namedRHS=new Set();
-  for(const e of exprs){
-    if(!e.p?.name||!e.p.rhs)continue;
-    namedRHS.add(e.p.rhs.trim());
+  // 1. Function calls: name\left(…\right)
+  const fnRe=/([a-zA-Z](?:_\{[^}]+\})?)\\left\(/g;
+  let m;
+  while((m=fnRe.exec(latex))!==null){
+    let depth=1,i=m.index+m[0].length;
+    while(i<latex.length&&depth>0){
+      if(latex.startsWith('\\left(',i)||latex.startsWith('\\left[',i)){depth++;i+=6;continue}
+      if(latex.startsWith('\\left\\{',i)){depth++;i+=7;continue}
+      if(latex.startsWith('\\right)',i)||latex.startsWith('\\right]',i)){depth--;i+=7;continue}
+      if(latex.startsWith('\\right\\}',i)){depth--;i+=8;continue}
+      i++;
+    }
+    const full=latex.slice(m.index,i);
+    if(full.length>=10)terms.add(full);
   }
 
-  const rhsList=[];
+  // 2. \frac{…}{…}
+  const fracRe=/\\frac\{/g;
+  while((m=fracRe.exec(latex))!==null){
+    let depth=1,i=m.index+m[0].length;
+    while(i<latex.length&&depth>0){if(latex[i]==='{')depth++;if(latex[i]==='}')depth--;i++}
+    const afterNum=i;
+    if(i<latex.length&&latex[i]==='{'){
+      depth=1;i++;
+      while(i<latex.length&&depth>0){if(latex[i]==='{')depth++;if(latex[i]==='}')depth--;i++}
+      const full=latex.slice(m.index,i);
+      if(full.length>=12)terms.add(full);
+    }
+  }
+
+  // 3. \sqrt{…} and \sqrt[…]{…}
+  const sqRe=/\\sqrt(\[[^\]]*\])?\{/g;
+  while((m=sqRe.exec(latex))!==null){
+    let depth=1,i=m.index+m[0].length;
+    while(i<latex.length&&depth>0){if(latex[i]==='{')depth++;if(latex[i]==='}')depth--;i++}
+    const full=latex.slice(m.index,i);
+    if(full.length>=8)terms.add(full);
+  }
+
+  // 4. Balanced \left(…\right) groups with an operation inside
+  const grpRe=/\\left\(/g;
+  while((m=grpRe.exec(latex))!==null){
+    if(m.index>0){
+      const before=latex.slice(Math.max(0,m.index-20),m.index);
+      if(/[a-zA-Z]$/.test(before)||/\}_?$/.test(before))continue;
+    }
+    let depth=1,i=m.index+6;
+    while(i<latex.length&&depth>0){
+      if(latex.startsWith('\\left(',i)||latex.startsWith('\\left[',i)){depth++;i+=6;continue}
+      if(latex.startsWith('\\left\\{',i)){depth++;i+=7;continue}
+      if(latex.startsWith('\\right)',i)){depth--;if(depth===0){i+=7;break}i+=7;continue}
+      if(latex.startsWith('\\right]',i)||latex.startsWith('\\right\\}',i)){depth--;i+=7;continue}
+      i++;
+    }
+    const inner=latex.slice(m.index+6,i-7);
+    if(inner.length>=8&&/[+\-\*\^\/\\]/.test(inner)){
+      terms.add(latex.slice(m.index,i));
+    }
+  }
+
+  // 5. Operatorname calls: \operatorname{name}\left(…\right)
+  const opRe=/\\operatorname\{([^}]+)\}\\left[(\[]/g;
+  while((m=opRe.exec(latex))!==null){
+    if(BUILTINS.has(m[1]))continue;
+    const open=latex[m.index+m[0].length-1];
+    const close=open==='('?')':']';
+    let depth=1,i=m.index+m[0].length;
+    while(i<latex.length&&depth>0){
+      if(latex.startsWith('\\left(',i)||latex.startsWith('\\left[',i)){depth++;i+=6;continue}
+      if(latex.startsWith('\\right'+close,i)){depth--;i+=7;continue}
+      if(latex.startsWith('\\right)',i)||latex.startsWith('\\right]',i)){depth--;i+=7;continue}
+      i++;
+    }
+    const full=latex.slice(m.index,i);
+    if(full.length>=15)terms.add(full);
+  }
+
+  return terms;
+}
+
+function findReusableExpressions(exprs,dep){
+  const namedRHS=new Set();
+  for(const e of exprs){
+    if(e.p?.name&&e.p.rhs)namedRHS.add(e.p.rhs.trim());
+  }
+
+  const termMap=new Map();
   for(const e of exprs){
     if(!e.latex||e.latex.length>2000)continue;
     const eq=findDefEq(e.latex);
     const rhs=eq>0?e.latex.slice(eq+1):e.latex;
-    if(rhs.length>=MIN_LEN) rhsList.push({name:e.p?.name||'#'+e.id,rhs});
-  }
-
-  const fragMap=new Map();
-  for(const{name,rhs}of rhsList){
-    const seen=new Set();
-    for(let len=MIN_LEN;len<=Math.min(MAX_LEN,rhs.length);len+=10){
-      for(let i=0;i<=rhs.length-len;i+=STEP){
-        const frag=rhs.slice(i,i+len);
-        if(seen.has(frag))continue;seen.add(frag);
-        if(!fragMap.has(frag))fragMap.set(frag,new Set());
-        fragMap.get(frag).add(name);
-      }
+    const terms=extractEvaluableTerms(rhs);
+    for(const t of terms){
+      if(namedRHS.has(t.trim()))continue;
+      if(!termMap.has(t))termMap.set(t,new Set());
+      termMap.get(t).add(e.p?.name||'#'+e.id);
     }
   }
 
-  let hits=[...fragMap.entries()]
-    .filter(([f,owners])=>owners.size>=MIN_OCCUR)
-    .filter(([f])=>!namedRHS.has(f.trim()));
-
-  hits.sort((a,b)=>(b[0].length*b[1].size)-(a[0].length*a[1].size));
+  let hits=[...termMap.entries()].filter(([_,o])=>o.size>=2);
+  hits.sort((a,b)=>(b[1].size*b[0].length)-(a[1].size*a[0].length));
 
   const deduped=[];
-  for(const[frag,owners]of hits){
+  for(const[term,owners]of hits){
     const dominated=deduped.some(([longer,lo])=>
-      longer.includes(frag)&&lo.size>=owners.size);
-    if(!dominated) deduped.push([frag,owners]);
+      longer.includes(term)&&lo.size>=owners.size);
+    if(!dominated)deduped.push([term,owners]);
   }
   return deduped.slice(0,12);
 }
 
-function findRepeatedCalls(exprs,dep){
-  const callSigs=new Map();
-  for(const e of exprs){
-    if(!e.p?.calls)continue;
-    for(const c of e.p.calls){
-      if(!dep.def[c.fn])continue;
-      const sig=c.fn+'('+c.args.map(a=>a.trim()).join(',')+')';
-      if(!callSigs.has(sig))callSigs.set(sig,{fn:c.fn,args:c.args,callers:new Set(),fnCost:eCost(dep.def[c.fn])});
-      callSigs.get(sig).callers.add(e.p?.name||e.id);
-    }
-  }
-  const namedResults=new Set();
-  for(const e of exprs){
-    if(!e.p?.name||!e.p.calls||e.p.calls.length!==1)continue;
-    const c=e.p.calls[0];
-    const sig=c.fn+'('+c.args.map(a=>a.trim()).join(',')+')';
-    namedResults.add(sig);
-  }
-  return[...callSigs.entries()]
-    .filter(([sig,v])=>v.callers.size>=2&&!namedResults.has(sig))
-    .sort((a,b)=>b[1].callers.size*b[1].fnCost-a[1].callers.size*a[1].fnCost);
-}
-
 function genReusableSection(a){
-  const fragments=findRepeatedFragments(a.exprs,a.dep);
-  const calls=findRepeatedCalls(a.exprs,a.dep);
-  const found=fragments.length>0||calls.length>0;
+  const reusable=findReusableExpressions(a.exprs,a.dep);
 
   let h=`<section id="sec-reuse"><h2><span class="section-icon">&#128260;</span> Reusable Sub-Expressions</h2>`;
-  h+=`<p class="desc">Scanning all expression LaTeX for mathematical computations that are calculated in multiple places but never stored in a named variable. Extracting these into a variable avoids redundant recalculation.</p>`;
+  h+=`<p class="desc">Scanning all expressions for complete, evaluable computations (function calls, fractions, roots, grouped operations) that evaluate to a specific value, appear in two or more expressions, but are never stored in a named variable. Extracting these into a variable avoids redundant recalculation.</p>`;
 
-  if(!found){
-    h+=`<div class="callout green"><strong>No repeated unstored sub-expressions found.</strong> Every computation that appears in multiple expressions is already stored in a named variable. The graph is well-factored.</div>`;
+  if(reusable.length===0){
+    h+=`<div class="callout green"><strong>No repeated unstored sub-expressions found.</strong> Every evaluable computation that appears in multiple expressions is already stored in a named variable. The graph is well-factored.</div>`;
     h+=`</section>`;
     return h;
   }
 
-  if(fragments.length>0){
-    h+=`<div class="card open" id="card-frags"><div class="card-header" onclick="toggleCard('card-frags')"><h3>Repeated Inline Computations (${fragments.length})</h3>${chevSvg}</div><div class="card-body">`;
-    h+=`<p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem">These mathematical fragments appear verbatim in multiple expressions but are never assigned to a variable. Each occurrence is recalculated independently. Consider storing the result in a named variable and referencing it instead.</p>`;
+  h+=`<div class="card open" id="card-reuse"><div class="card-header" onclick="toggleCard('card-reuse')"><h3>Repeated Evaluable Expressions (${reusable.length})</h3>${chevSvg}</div><div class="card-body">`;
+  h+=`<p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem">Each entry below is a complete mathematical expression that evaluates to a specific value. It appears identically in multiple expressions but is never assigned to its own variable — so it is recalculated from scratch every time. Store it once and reference the result.</p>`;
 
-    for(const[frag,owners]of fragments){
-      const ownerList=[...owners];
-      const cc=frag.length>60?'var(--orange)':'var(--yellow)';
-      h+=`<div style="background:var(--surface-hover);border-radius:8px;padding:0.85rem 1rem;margin-bottom:0.6rem">`;
-      h+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.35rem">`;
-      h+=`<span style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);word-break:break-all;flex:1">${H(T(frag,120))}</span>`;
-      h+=`<span class="badge high" style="flex-shrink:0;margin-left:0.5rem">${ownerList.length}×</span></div>`;
-      h+=`<div style="font-size:0.78rem;color:var(--text-muted)">Found in: ${ownerList.slice(0,6).map(n=>ei(n)).join(', ')}${ownerList.length>6?' <span style="opacity:0.6">+'+( ownerList.length-6)+' more</span>':''}</div>`;
-      h+=`<div style="font-size:0.78rem;color:var(--green);margin-top:0.3rem">→ Store as a named variable and reference it in each expression</div>`;
-      h+=`</div>`;
-    }
-    h+=`</div></div>`;
+  for(const[term,owners]of reusable){
+    const ownerList=[...owners];
+    const isFnCall=/^[a-zA-Z]/.test(term)&&/\\left\(/.test(term);
+    const typeLabel=isFnCall?'function call':/^\\frac/.test(term)?'fraction':/^\\sqrt/.test(term)?'root':'expression';
+    h+=`<div style="background:var(--surface-hover);border-radius:8px;padding:0.85rem 1rem;margin-bottom:0.6rem">`;
+    h+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.35rem">`;
+    h+=`<span style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);word-break:break-all;flex:1">${H(T(term,140))}</span>`;
+    h+=`<span class="badge high" style="flex-shrink:0;margin-left:0.5rem">${ownerList.length}×</span></div>`;
+    h+=`<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem"><span class="badge" style="font-size:0.7rem;background:var(--surface);margin-right:0.4rem">${typeLabel}</span>Found in: ${ownerList.slice(0,6).map(n=>ei(n)).join(', ')}${ownerList.length>6?' <span style="opacity:0.6">+'+(ownerList.length-6)+' more</span>':''}</div>`;
+    h+=`<div style="font-size:0.78rem;color:var(--green);margin-top:0.3rem">→ Store as a named variable (e.g. <code>v = ${H(T(term,50))}</code>) and reference it</div>`;
+    h+=`</div>`;
   }
-
-  if(calls.length>0){
-    h+=`<div class="card${fragments.length===0?' open':''}" id="card-dupcalls"><div class="card-header" onclick="toggleCard('card-dupcalls')"><h3>Repeated Function Calls (${Math.min(calls.length,12)})</h3>${chevSvg}</div><div class="card-body">`;
-    h+=`<p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem">These identical function calls appear in multiple expressions but the result is never cached. If the function is expensive, store the result once (e.g., <code>r = f(a, b)</code>) and reference <code>r</code> everywhere.</p>`;
-    h+=`<table class="pattern-table"><thead><tr><th>Call</th><th>Fn Cost</th><th>Appears In</th><th>Recommendation</th></tr></thead><tbody>`;
-    for(const[sig,info]of calls.slice(0,12)){
-      const callerList=[...info.callers].slice(0,5).map(c=>ei(c)).join(', ');
-      const extra=info.callers.size>5?' +'+( info.callers.size-5):'';
-      const cc=info.fnCost>8?'var(--orange)':info.fnCost>3?'var(--yellow)':'var(--text-muted)';
-      const rec=info.fnCost>=4?`<span style="color:var(--green)">Cache in a variable</span>`:`<span style="color:var(--text-muted)">Low cost — optional</span>`;
-      h+=`<tr><td style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);word-break:break-all">${H(T(info.fn+'('+info.args.map(x=>T(x.trim(),20)).join(', ')+')',70))}</td><td style="font-family:var(--mono);color:${cc}">${info.fnCost.toFixed(1)}</td><td style="font-size:0.78rem">${callerList}${extra}</td><td style="font-size:0.78rem">${rec}</td></tr>`;
-    }
-    h+=`</tbody></table></div></div>`;
-  }
+  h+=`</div></div>`;
 
   h+=`</section>`;
   return h;
