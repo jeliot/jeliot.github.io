@@ -75,7 +75,7 @@
     .stat-card.teal .value { color: var(--teal); }
 
     .report-layout { display: flex; position: relative; margin-left: -1.5rem; margin-right: -1.5rem; }
-    .toc-sidebar { position: fixed; left: 0; top: 0; width: 200px; height: 100vh; overflow-y: auto; padding: 1.5rem 1rem 2rem; background: var(--bg); border-right: 1px solid var(--border); z-index: 100; flex-shrink: 0; }
+    .toc-sidebar { position: fixed; left: 0; top: 6rem; width: 200px; height: calc(100vh - 6rem); overflow-y: auto; padding: 1.5rem 1rem 2rem; background: var(--bg); border-right: 1px solid var(--border); z-index: 100; flex-shrink: 0; }
     .toc-sidebar .toc-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.75rem; padding-left: 0.25rem; }
     .report-content { flex: 1; min-width: 0; margin-left: 200px; padding: 0 1.5rem 4rem; }
     .toc { display: flex; flex-direction: column; gap: 0.4rem; }
@@ -232,7 +232,7 @@
   <header>
     <h1>Focused Graph Analysis</h1>
     <p class="subtitle">Targeted performance diagnostics: heavy expressions, reusable patterns, dependency mapping</p>
-    <p class="meta-link"><a href="cost-analysis.html">Cost methodology &rarr;</a> &nbsp;&middot;&nbsp; <a href="analysis2.html">General Analyzer v2 &rarr;</a></p>
+    <p class="meta-link"><a href="technical-overview.html">Technical overview</a> &nbsp;&middot;&nbsp; <a href="cost-analysis.html">Cost methodology &rarr;</a> &nbsp;&middot;&nbsp; <a href="analysis2.html">General Analyzer v2 &rarr;</a></p>
   </header>
 
   <div class="input-area" id="input-area">
@@ -1820,7 +1820,7 @@ async function run(){
     const graphUrl=$('url').value.trim()||null;
     const a=analyze(state);
     $('input-area').style.display='none';
-    $('report').innerHTML=`<a href="#" onclick="resetForm();return false" style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.85rem;color:var(--accent);text-decoration:none;margin-bottom:1.25rem;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">&larr; Analyze another graph</a>`+genReport(a,graphUrl);
+    $('report').innerHTML=`<div style="text-align:center;margin-bottom:1.25rem;"><a href="#" onclick="resetForm();return false" style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.85rem;color:var(--accent);text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">&larr; Analyze another graph</a></div>`+genReport(a,graphUrl);
     $('report').style.display='block';
     window.scrollTo({top:0,behavior:'smooth'});
     setTimeout(()=>{drawConceptMap();renderAllLatex($('report'))},80);

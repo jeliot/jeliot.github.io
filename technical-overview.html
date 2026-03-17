@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Technical Overview — Focused Graph Analysis</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-hover: #222632;
+      --border: #2a2e3d;
+      --text: #e4e6ed;
+      --text-muted: #8b8fa3;
+      --accent: #6c7ee1;
+      --accent-glow: rgba(108, 126, 225, 0.15);
+      --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.65; min-height: 100vh; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .container { max-width: 800px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    .nav-links { display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1.5rem; }
+    .nav-links a { color: var(--text-muted); }
+    .nav-links a:hover { color: var(--accent); }
+    header { margin-bottom: 2.5rem; }
+    header h1 { font-size: 1.9rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    header p { color: var(--text-muted); font-size: 0.95rem; }
+    .doc-content h2 { font-size: 1.25rem; font-weight: 700; margin: 2.5rem 0 1rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
+    .doc-content h3 { font-size: 1.05rem; font-weight: 600; margin: 1.5rem 0 0.6rem; }
+    .doc-content p { margin-bottom: 1rem; color: var(--text); }
+    .doc-content ul, .doc-content ol { margin: 0 0 1rem 1.5rem; }
+    .doc-content li { margin-bottom: 0.35rem; }
+    .doc-content li::marker { color: var(--text-muted); }
+    .doc-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+    .doc-content code { font-family: var(--mono); font-size: 0.88em; background: var(--surface); padding: 0.12em 0.4em; border-radius: 4px; color: var(--accent); }
+    .doc-content pre { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; overflow-x: auto; margin: 1rem 0; font-family: var(--mono); font-size: 0.82rem; line-height: 1.5; }
+    .doc-content pre code { background: none; padding: 0; color: inherit; }
+    .doc-content table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin: 1rem 0; background: var(--surface); border-radius: 8px; overflow: hidden; }
+    .doc-content th { text-align: left; padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--border); color: var(--text-muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .doc-content td { padding: 0.6rem 0.9rem; border-bottom: 1px solid rgba(42, 46, 61, 0.5); }
+    .doc-content tr:last-child td { border-bottom: none; }
+    .doc-content strong { font-weight: 600; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <nav class="nav-links">
+    <a href="index.html">&larr; Home</a>
+    <span>·</span>
+    <a href="focused-analysis.html">Focused Analysis</a>
+  </nav>
+
+  <header>
+    <h1>Technical Overview</h1>
+    <p>How the Focused Graph Analysis report is generated</p>
+  </header>
+
+  <article class="doc-content">
+    <p>This document describes how the Focused Graph Analysis report is generated in <code>focused-analysis.html</code>. The report analyzes Desmos calculator graph state to produce performance diagnostics and dependency insights.</p>
+
+    <hr>
+
+    <h2>1. Architecture Overview</h2>
+    <p>The report generation follows a <strong>pipeline architecture</strong>:</p>
+    <pre><code>Input (URL or JSON) → State Fetch → analyze() → Analysis Object → genReport() → HTML Output</code></pre>
+    <ul>
+      <li><strong>Input</strong>: Desmos graph URL or pasted graph state JSON</li>
+      <li><strong>State</strong>: Desmos <code>getState()</code> format (<code>state.expressions.list</code>, etc.)</li>
+      <li><strong>Analysis</strong>: Single <code>analyze(state)</code> call produces an analysis object</li>
+      <li><strong>Report</strong>: <code>genReport(a, graphUrl)</code> concatenates section HTML</li>
+    </ul>
+    <p>All logic runs client-side in a single HTML file. LaTeX rendering uses KaTeX.</p>
+
+    <hr>
+
+    <h2>2. Input Processing</h2>
+    <h3>2.1 State Acquisition</h3>
+    <ul>
+      <li><strong>URL</strong>: <code>fetchState(hash)</code> fetches <code>https://www.desmos.com/calculator/{hash}</code> with <code>Accept: application/json</code></li>
+      <li><strong>Paste</strong>: User pastes raw JSON; <code>JSON.parse()</code> extracts <code>state</code></li>
+      <li><strong>Structure</strong>: <code>state.expressions.list</code> is the primary array of items (expressions, folders, images, tables)</li>
+    </ul>
+    <h3>2.2 Item Types</h3>
+    <p>Items in <code>state.expressions.list</code> include:</p>
+    <ul>
+      <li><code>expression</code> — LaTeX expressions, sliders, points</li>
+      <li><code>folder</code> — Folders containing expressions</li>
+      <li><code>image</code> — Image expressions</li>
+      <li><code>table</code> — Table expressions</li>
+      <li><code>text</code> — Notes</li>
+    </ul>
+    <p>Only <code>expression</code> items are parsed for the dependency and cost analysis. Folders, images, and tables are counted and surfaced in specific sections.</p>
+
+    <hr>
+
+    <h2>3. LaTeX Parsing</h2>
+    <h3>3.1 Core Functions</h3>
+    <table>
+      <thead><tr><th>Function</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>parseExpr(latex)</code></td><td>Parse a single expression; returns <code>{type, name, refs, isFunc, isRec, isImplicit, params, rhs, calls}</code></td></tr>
+        <tr><td><code>varTokens(latex)</code></td><td>Extract variable identifiers (subscripts, point refs, single letters)</td></tr>
+        <tr><td><code>findFnCalls(latex)</code></td><td>Extract function calls with arguments</td></tr>
+        <tr><td><code>findDefEq(latex)</code></td><td>Find top-level <code>=</code> for assignment split</td></tr>
+        <tr><td><code>findDefIneq(latex)</code></td><td>Find inequality operators for implicit-style expressions</td></tr>
+      </tbody>
+    </table>
+    <h3>3.2 Expression Types</h3>
+    <ul>
+      <li><strong>function</strong>: <code>f(x)=...</code> — LHS matches <code>name\left(</code> pattern</li>
+      <li><strong>implicit</strong>: <code>y=...</code> or <code>x=...</code> — name is <code>y</code>/<code>x</code> or refs only <code>x</code>/<code>y</code></li>
+      <li><strong>variable</strong>: Named assignment, e.g. <code>a=5</code></li>
+      <li><strong>display</strong>: No assignment; value shown inline (e.g. <code>5</code>, <code>f(3)</code>)</li>
+      <li><strong>action</strong>: Contains <code>-&gt;</code> or <code>\to</code> (Computation Layer)</li>
+    </ul>
+    <h3>3.3 Recursion Detection</h3>
+    <p><code>isRec</code> is set when the RHS contains a call to the function's own name (e.g. <code>f(x)=f(x-1)+1</code>).</p>
+    <h3>3.4 Boolean Variables</h3>
+    <p><code>isBooleanVariable(e)</code> is true when the RHS is <strong>only</strong> curly-bracket segments (<code>\left\{...\right\}</code>). Handled by <code>rhsIsOnlyCurlyBracketSegments(rhs)</code>.</p>
+
+    <hr>
+
+    <h2>4. Dependency Graph</h2>
+    <h3>4.1 Structure (<code>buildDeps(parsedList)</code>)</h3>
+    <table>
+      <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>def</code></td><td><code>{name → parsed}</code></td><td>Definitions by name</td></tr>
+        <tr><td><code>on</code></td><td><code>{name → Set&lt;dep&gt;}</code></td><td>Direct dependencies (refs + called functions)</td></tr>
+        <tr><td><code>by</code></td><td><code>{name → Set&lt;dep&gt;}</code></td><td>Direct dependents</td></tr>
+        <tr><td><code>all</code></td><td><code>Set&lt;name&gt;</code></td><td>All defined names</td></tr>
+        <tr><td><code>callsTo</code></td><td><code>{name → [{fn, args, argVars}]}</code></td><td>Outgoing function calls</td></tr>
+        <tr><td><code>calledBy</code></td><td><code>{fn → [{caller, args}]}</code></td><td>Incoming callers</td></tr>
+        <tr><td><code>trans(n)</code></td><td>Function</td><td>Transitive downstream (all dependents)</td></tr>
+        <tr><td><code>transUp(n)</code></td><td>Function</td><td>Transitive upstream (all dependencies)</td></tr>
+      </tbody>
+    </table>
+    <h3>4.2 Dependency Sources</h3>
+    <ul>
+      <li><strong>Variable refs</strong>: From <code>varTokens(rhs)</code> — variables used in the RHS</li>
+      <li><strong>Function calls</strong>: From <code>findFnCalls(rhs)</code> — functions invoked</li>
+      <li>Only <strong>named</strong> expressions contribute to the graph; display expressions do not</li>
+    </ul>
+
+    <hr>
+
+    <h2>5. Cost Estimation</h2>
+    <h3>5.1 <code>eCost(p)</code></h3>
+    <p>Heuristic cost from expression structure:</p>
+    <ul>
+      <li>Base: 1 + <code>0.003 * latex.length</code></li>
+      <li>Recursive: +30</li>
+      <li>Summation: +6</li>
+      <li>Integral: +10</li>
+      <li>Sum + integral: +20</li>
+      <li><code>\operatorname{for}</code>: +8</li>
+      <li><code>\operatorname{repeat}</code>: +6</li>
+      <li><code>\operatorname{polygon}</code>: +4</li>
+      <li><code>\operatorname{with}</code> / <code>\operatorname{join}</code>: +2</li>
+      <li><code>\left\{</code>: +1</li>
+    </ul>
+    <h3>5.2 Severity Tiers</h3>
+    <p><code>costSeverity(cost)</code> maps to: <code>critical</code> (&gt;20), <code>high</code> (&gt;8), <code>medium</code> (&gt;3), <code>low</code> (≤3).</p>
+
+    <hr>
+
+    <h2>6. Analysis Object</h2>
+    <p><code>analyze(state)</code> returns:</p>
+    <table>
+      <thead><tr><th>Property</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>m</code></td><td>Counts: expr, fold, img, slider, drag, movPt, rec, fn, etc.</td></tr>
+        <tr><td><code>folders</code></td><td><code>{id → {title, hidden}}</code></td></tr>
+        <tr><td><code>exprs</code></td><td>Enriched expressions: <code>{id, latex, hidden, slider, drag, p, line, color, ...}</code></td></tr>
+        <tr><td><code>parsed</code></td><td>Parsed results aligned with <code>exprs</code></td></tr>
+        <tr><td><code>dep</code></td><td>Dependency graph</td></tr>
+        <tr><td><code>usedByStyle</code></td><td><code>Set</code> of names referenced in style properties (color, label, etc.)</td></tr>
+        <tr><td><code>usedByPolygon</code></td><td><code>Set</code> of names used in polygon/display expressions (with fill/opacity/width)</td></tr>
+        <tr><td><code>usedByLabel</code></td><td><code>Set</code> of names used in expressions with enabled labels (incl. label text)</td></tr>
+        <tr><td><code>interactables</code></td><td>Sliders, draggables, movable points with downstream cost</td></tr>
+        <tr><td><code>interactiveDownstream</code></td><td>Names that depend on interactables</td></tr>
+        <tr><td><code>inputs</code></td><td>Root variables (no dependencies) with affected downstream</td></tr>
+        <tr><td><code>lineMap</code></td><td><code>{name → line}</code> for navigation</td></tr>
+        <tr><td><code>items</code>, <code>allItemsWithLine</code></td><td>Raw items with line numbers</td></tr>
+      </tbody>
+    </table>
+
+    <hr>
+
+    <h2>7. "Used By" Sets</h2>
+    <p>These sets mark variables as used so they are not reported as unused:</p>
+    <h3>7.1 <code>usedByStyle</code></h3>
+    <ul>
+      <li>Built by <code>buildUsedByStyle(items, dep)</code></li>
+      <li>Recursively scans all items for variable names in string properties</li>
+      <li>Skips <code>latex</code> when long, hex colors, and numeric strings</li>
+      <li>Uses <code>normalizeVarForMatch()</code> for <code>a_1</code> ↔ <code>a_{1}</code></li>
+    </ul>
+    <h3>7.2 <code>usedByPolygon</code></h3>
+    <ul>
+      <li>Expressions with <code>hasFillOrOpacity(e)</code> (fill, fillOpacity, lineOpacity, pointOpacity, lineWidth)</li>
+      <li>And either <code>hasPolygon(latex)</code> or <code>type === 'display'</code> (non-numeric)</li>
+      <li>Collects <code>refs</code> and <code>calls</code> from those expressions</li>
+    </ul>
+    <h3>7.3 <code>usedByLabel</code></h3>
+    <ul>
+      <li>Expressions with <code>showLabel === true</code></li>
+      <li>Collects <code>refs</code>, <code>calls</code>, and <code>extractLabelRefs(e.label, dep)</code></li>
+      <li><code>extractLabelRefs</code> parses <code>${var}</code>, LaTeX tokens, and function calls in label text</li>
+    </ul>
+
+    <hr>
+
+    <h2>8. Report Sections (Order)</h2>
+    <ol>
+      <li><strong>Heavy Expressions</strong> — Cost ≥ 4, non-polygon; classified by impact (loading vs interactivity)</li>
+      <li><strong>Reusable Patterns</strong> — Sub-expressions repeated across expressions without a named variable</li>
+      <li><strong>Interactive Dependencies</strong> — Sliders, draggables, movable points and their downstream</li>
+      <li><strong>Implicit Expressions and Regressions</strong> — <code>y=</code>, <code>x=</code>, or <code>~</code> expressions</li>
+      <li><strong>Polygons &amp; Graph Objects</strong> — Display with fill/opacity/width, or polygon in LaTeX</li>
+      <li><strong>Images</strong> — Image expressions</li>
+      <li><strong>Labels</strong> — Expressions with <code>showLabel</code></li>
+      <li><strong>Custom Functions and Booleans</strong> — Functions and boolean variables</li>
+      <li><strong>Actions</strong> — <code>-&gt;</code> / <code>\to</code> expressions</li>
+      <li><strong>Unused Expressions</strong> — Named definitions without references (with disclaimer)</li>
+      <li><strong>Unstored Values</strong> — Inline function calls and numerical displays</li>
+      <li><strong>Dependency Concept Map</strong> — Layered dependency graph</li>
+      <li><strong>Other Items</strong> — Items not in any section above</li>
+    </ol>
+
+    <hr>
+
+    <h2>9. Section Classification Logic</h2>
+    <h3>9.1 Heavy Expressions</h3>
+    <ul>
+      <li><code>eCost(p) >= COST_THRESHOLD</code> (4)</li>
+      <li>Excludes <code>j_{uice}</code>, polygon expressions</li>
+      <li><code>classifyHeavy()</code> assigns impact (load, interact, both) from <code>interactiveDownstream</code></li>
+    </ul>
+    <h3>9.2 Polygons</h3>
+    <ul>
+      <li><code>hasFillOrOpacity(e)</code> (fill, fillOpacity, lineOpacity, pointOpacity, lineWidth)</li>
+      <li>And either <code>hasPolygon(latex)</code> or <code>(type === 'display' && !isNumericalConstant(latex))</code></li>
+      <li>Excludes expressions with <code>showLabel</code></li>
+    </ul>
+    <h3>9.3 Labels</h3>
+    <p><code>e.showLabel === true</code></p>
+    <h3>9.4 Custom Functions and Booleans</h3>
+    <p><code>p.isFunc</code> or <code>isBooleanVariable(e)</code></p>
+    <h3>9.5 Unused</h3>
+    <ul>
+      <li>Named, not action, not implicit, not polygon, not used by style/polygon/label</li>
+      <li>Excludes functions, booleans, labels, sliders, draggables, movable points</li>
+      <li>Excludes <code>dep.by[name]</code> or <code>calledBy[name]</code> non-empty</li>
+    </ul>
+    <h3>9.6 Unstored Values</h3>
+    <ul>
+      <li>Function calls not stored in a variable (e.g. <code>f(x)</code> in <code>y = f(x) + 1</code>)</li>
+      <li>Numerical display expressions (e.g. <code>5</code>, <code>\pi</code>)</li>
+      <li>Display expressions with function calls (e.g. <code>f(5)</code>)</li>
+      <li>Excludes implicit, action, recursive, polygon, display (except numerical and display-with-calls)</li>
+    </ul>
+    <h3>9.7 Other Items</h3>
+    <p><code>findOtherItems(a)</code> builds <code>exprIdsInSection</code> from all sections. Items not in that set are "Other".</p>
+
+    <hr>
+
+    <h2>10. HTML Generation</h2>
+    <h3>10.1 <code>genReport(a, graphUrl)</code></h3>
+    <ol>
+      <li>Build TOC sidebar</li>
+      <li>Stats grid from section counts</li>
+      <li>Call each <code>gen*Section(a)</code> in order</li>
+      <li>Assemble footer</li>
+    </ol>
+    <h3>10.2 LaTeX Rendering</h3>
+    <ul>
+      <li><code>latexEl(tex, line)</code> produces <code>&lt;span data-latex="..." data-line="..."&gt;</code></li>
+      <li><code>renderAllLatex(root)</code> runs KaTeX on <code>[data-latex]</code> elements</li>
+      <li>Fallback text: "Nameless expression" on render failure</li>
+    </ul>
+    <h3>10.3 Concept Map Interaction</h3>
+    <ul>
+      <li><code>drawConceptMap()</code> draws SVG edges between nodes</li>
+      <li><code>selectNode(name)</code> highlights upstream/downstream</li>
+      <li><code>showNodeDetail(name)</code> shows node details in a side panel</li>
+    </ul>
+
+    <hr>
+
+    <h2>11. Key Constants</h2>
+    <table>
+      <thead><tr><th>Constant</th><th>Value</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>COST_THRESHOLD</code></td><td>4</td><td>Heavy expression cutoff</td></tr>
+        <tr><td><code>COST_CRITICAL</code></td><td>20</td><td>Critical severity</td></tr>
+        <tr><td><code>COST_HIGH</code></td><td>8</td><td>High severity</td></tr>
+        <tr><td><code>COST_MEDIUM</code></td><td>3</td><td>Medium severity</td></tr>
+      </tbody>
+    </table>
+
+    <hr>
+
+    <h2>12. File Structure</h2>
+    <p><code>focused-analysis.html</code> contains:</p>
+    <ul>
+      <li><strong>CSS</strong> (lines ~1–250): Theming, layout, components</li>
+      <li><strong>HTML</strong> (lines ~250–300): Input form, container</li>
+      <li><strong>JavaScript</strong> (lines ~300–1840): Parser, analysis, report generation, interaction</li>
+    </ul>
+    <p>No external JS libraries except KaTeX for LaTeX rendering.</p>
+  </article>
+</div>
+</body>
+</html>
