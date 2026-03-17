@@ -30,7 +30,7 @@
     body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
-    .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    .container { max-width: 1600px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
     header { text-align: center; padding: 3rem 0 2rem; }
     header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
     header .subtitle { color: var(--text-muted); font-size: 0.95rem; }
@@ -74,10 +74,14 @@
     .stat-card.accent .value { color: var(--accent); }
     .stat-card.teal .value { color: var(--teal); }
 
-    .toc { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 2rem; }
-    .toc a { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.5rem 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 0.82rem; color: var(--text-muted); text-decoration: none; transition: border-color 0.15s, color 0.15s; }
+    .report-layout { display: flex; position: relative; margin-left: -1.5rem; margin-right: -1.5rem; }
+    .toc-sidebar { position: fixed; left: 0; top: 0; width: 200px; height: 100vh; overflow-y: auto; padding: 1.5rem 1rem 2rem; background: var(--bg); border-right: 1px solid var(--border); z-index: 100; flex-shrink: 0; }
+    .toc-sidebar .toc-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.75rem; padding-left: 0.25rem; }
+    .report-content { flex: 1; min-width: 0; margin-left: 200px; padding: 0 1.5rem 4rem; }
+    .toc { display: flex; flex-direction: column; gap: 0.4rem; }
+    .toc a { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.45rem 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; font-size: 0.78rem; color: var(--text-muted); text-decoration: none; transition: border-color 0.15s, color 0.15s; }
     .toc a:hover { border-color: var(--accent); color: var(--accent); }
-    .toc a .num { background: var(--accent-glow); color: var(--accent); width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
+    .toc a .num { background: var(--accent-glow); color: var(--accent); width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 700; flex-shrink: 0; }
 
     .callout { padding: 1rem 1.25rem; border-radius: 8px; border-left: 3px solid; margin: 1rem 0; font-size: 0.88rem; }
     .callout.red { background: var(--red-glow); border-color: var(--red); }
@@ -104,7 +108,7 @@
     .card-header h3 { font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
     .chevron { transition: transform 0.2s; color: var(--text-muted); }
     .card.open .chevron { transform: rotate(180deg); }
-    .card-body { display: none; padding: 0 1.25rem 1.25rem; }
+    .card-body { display: none; padding: 0 1.25rem 1.25rem; overflow-x: auto; }
     .card.open .card-body { display: block; }
 
     /* Heavy expression cards */
@@ -117,10 +121,23 @@
     .heavy-alts { padding: 0; list-style: none; }
     .heavy-alts li { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.82rem; color: var(--text); padding: 0.3rem 0; }
     .heavy-alts li::before { content: '→'; color: var(--green); font-weight: 700; flex-shrink: 0; }
-    .cost-pill { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; padding: 0.15em 0.55em; border-radius: 4px; white-space: nowrap; }
+    /* Cost severity: qualitative tiers (critical > high > medium > low). Thresholds in costSeverity(). */
+    .cost-critical { color: var(--red) !important; }
+    .cost-high { color: var(--orange) !important; }
+    .cost-medium { color: var(--yellow) !important; }
+    .cost-low { color: var(--text-muted) !important; }
+    .cost-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+    .cost-dot.cost-critical { background: var(--red); }
+    .cost-dot.cost-high { background: var(--orange); }
+    .cost-dot.cost-medium { background: var(--yellow); }
+    .cost-dot.cost-low { background: var(--text-muted); opacity: 0.6; }
+    .map-legend-swatch.cost-critical { background: var(--red); border-color: var(--red); }
+    .map-legend-swatch.cost-high { background: var(--orange); border-color: var(--orange); }
+    .map-legend-swatch.cost-medium { background: var(--yellow); border-color: var(--yellow); }
+    .map-legend-swatch.cost-low { background: var(--text-muted); border-color: var(--border); opacity: 0.7; }
 
     /* Reusable patterns */
-    .pattern-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; background: var(--surface); border-radius: 10px; overflow: hidden; }
+    .pattern-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; background: var(--surface); border-radius: 10px; overflow: hidden; table-layout: auto; }
     .pattern-table th { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
     .pattern-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid rgba(42, 46, 61, 0.5); vertical-align: top; }
     .pattern-table tr:last-child td { border-bottom: none; }
@@ -140,7 +157,6 @@
     .dep-tree li.collapsed > ul { display: none; }
     .dep-tree li.collapsed > .tn .arrow { transform: rotate(-90deg); }
     .dep-tree .tn .nm { font-family: var(--mono); font-weight: 600; }
-    .dep-tree .tn .ct { font-family: var(--mono); font-size: 0.72rem; }
     .dep-tree .tn .tg { font-size: 0.55rem; padding: 0.05em 0.3em; border-radius: 3px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
     .dep-tree .circ { color: var(--text-muted); font-style: italic; font-size: 0.78rem; padding: 0.2rem 0.5rem; display: block; }
 
@@ -166,7 +182,6 @@
     .map-node:hover { transform: translateY(-1px); z-index: 3; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
     .map-node.selected { box-shadow: 0 0 0 2px var(--accent), 0 0 16px var(--accent-glow); z-index: 4; }
     .map-node.highlighted { z-index: 2; }
-    .map-node .node-cost { font-size: 0.6rem; opacity: 0.7; }
     .map-node .node-tag { font-size: 0.45rem; padding: 0.05em 0.2em; border-radius: 2px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
     .map-legend { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; font-size: 0.75rem; color: var(--text-muted); align-items: center; }
     .map-legend-item { display: flex; align-items: center; gap: 0.3rem; }
@@ -182,9 +197,14 @@
     .nd-dep-item { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; padding: 0.15rem 0; }
     .nd-dep-item .dep-link { cursor: pointer; }
     .nd-dep-item .dep-link:hover { text-decoration: underline; }
-    .nd-dep-item .dep-cost { font-family: var(--mono); font-size: 0.72rem; }
 
     footer { text-align: center; padding: 2rem 0; color: var(--text-muted); font-size: 0.8rem; border-top: 1px solid var(--border); }
+    @media (max-width: 900px) {
+      .toc-sidebar { position: static; width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border); padding: 1rem 1.5rem; }
+      .report-content { margin-left: 0; }
+      .report-layout { flex-direction: column; }
+      .toc { flex-direction: row; flex-wrap: wrap; gap: 0.5rem; }
+    }
     @media (max-width: 640px) { header h1 { font-size: 1.5rem; } .summary-grid { grid-template-columns: 1fr 1fr; } .input-row { flex-direction: column; } .nd-deps { grid-template-columns: 1fr; } }
     .katex-display { margin: 0 !important; }
     .katex { font-size: 0.92em; color: inherit; }
@@ -194,6 +214,14 @@
     td .latex-render { max-height: 4rem; overflow-y: auto; display: block; }
     .map-node .latex-render { display: inline; }
     .map-node .katex { font-size: 0.78em; }
+    .img-thumbnail-wrap { display: flex; align-items: center; justify-content: flex-start; }
+    .img-thumbnail { max-width: 80px; max-height: 60px; object-fit: contain; border-radius: 6px; background: var(--surface-hover); border: 1px solid var(--border); }
+    .img-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; }
+    .img-gallery-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color 0.15s, box-shadow 0.15s; }
+    .img-gallery-item:hover { border-color: var(--accent); box-shadow: 0 2px 12px var(--accent-glow); }
+    .img-gallery-item .img-frame { aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center; background: var(--surface-hover); padding: 0.5rem; }
+    .img-gallery-item .img-frame img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; }
+    .img-gallery-item .img-caption { padding: 0.5rem 0.75rem; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid var(--border); }
   </style>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
@@ -249,7 +277,7 @@ function formatStyleInfo(e){
   return parts.length?parts.join(' '):'';
 }
 function showLatexFallback(el,line){
-  el.textContent=line!=null&&line!==''?`See line ${line}`:'See expression';
+  el.textContent='Nameless expression';
   el.style.fontFamily='var(--mono)';el.style.fontSize='0.75rem';el.style.wordBreak='break-all';
 }
 function renderAllLatex(root){
@@ -384,6 +412,94 @@ function buildDeps(parsedList){
   return{def,on,by,all,trans,transUp,callsTo,calledBy};
 }
 
+/** Normalize variable name for matching: a_1 <-> a_{1}. Desmos may store either format. */
+function normalizeVarForMatch(s){
+  if(!s||typeof s!=='string')return s;
+  const t=s.trim();
+  const m=t.match(/^([a-zA-Z])_\{([^}]+)\}$/);
+  if(m)return m[1]+'_'+m[2];
+  return t;
+}
+
+/** Extract variable/function names from label text and resolve to canonical names in dep. Handles ${var}, LaTeX, and plain text. */
+function extractLabelRefs(label,dep){
+  const used=new Set();
+  const allNames=dep?.all;
+  const def=dep?.def;
+  if(!allNames||allNames.size===0)return used;
+  const namePairs=[...allNames].map(n=>[n,normalizeVarForMatch(n)]);
+  if(def)for(const fn of Object.keys(def))namePairs.push([fn,normalizeVarForMatch(fn)]);
+  function matchesName(s){
+    if(allNames.has(s))return s;
+    if(def?.[s])return s;
+    const n=normalizeVarForMatch(s);
+    for(const [canon,norm] of namePairs)if(norm===n)return canon;
+    return null;
+  }
+  const labelStr=typeof label==='string'?label:'';
+  if(!labelStr)return used;
+  const seen=new Set();
+  const add=(v)=>{const m=matchesName(v);if(m&&!seen.has(m)){seen.add(m);used.add(m);}};
+  const reNested=/\$\{((?:[^{}]|\{[^{}]*\})*)\}/g;
+  let mm;
+  while((mm=reNested.exec(labelStr))!==null){
+    const inner=mm[1].trim();
+    if(inner&&!/^-?\d*\.?\d+$/.test(inner))add(inner);
+  }
+  const tokens=varTokens(labelStr);
+  if(tokens)for(const t of tokens)if(!BUILTINS.has(t)&&!BUILTINS.has(t.replace(/.*_\{|\}/g,'')))add(t);
+  const calls=findFnCalls(labelStr);
+  if(calls)for(const c of calls)if(def?.[c.fn])add(c.fn);
+  return used;
+}
+
+/** Recursively extract variable names referenced in style properties. Uses raw items (all types) and walks the full object tree. */
+function buildUsedByStyle(items,dep){
+  const used=new Set();
+  const allNames=dep?.all;
+  if(!allNames||allNames.size===0)return used;
+  const namePairs=[...allNames].map(n=>[n,normalizeVarForMatch(n)]);
+  function matchesName(s){
+    if(allNames.has(s))return s;
+    const n=normalizeVarForMatch(s);
+    for(const [canon,norm] of namePairs)if(norm===n)return canon;
+    return null;
+  }
+  function addIfRef(val){
+    if(val==null||val===undefined)return;
+    const s=typeof val==='string'?val:String(val).trim();
+    if(!s||s.length>80)return;
+    if(/^#[0-9a-fA-F]{3,8}$/.test(s))return;
+    if(/^-?\d*\.?\d+$/.test(s))return;
+    const m=matchesName(s);if(m)used.add(m);
+  }
+  function extractStrings(obj,seen){
+    if(obj==null)return;
+    if(typeof obj==='string'){addIfRef(obj);return}
+    if(typeof obj!=='object')return;
+    if(seen.has(obj))return;
+    seen.add(obj);
+    if(Array.isArray(obj)){for(const item of obj)extractStrings(item,seen);return}
+    for(const k of Object.keys(obj)){
+      if(k==='latex'&&typeof obj[k]==='string'&&obj[k].length>50)continue;
+      const v=obj[k];
+      if(typeof v==='string')addIfRef(v);
+      else extractStrings(v,seen);
+    }
+  }
+  for(const it of items||[]){
+    if(!it||typeof it!=='object')continue;
+    const seen=new WeakSet();
+    for(const k of Object.keys(it)){
+      if(k==='latex'&&typeof it[k]==='string'&&it[k].length>50)continue;
+      const v=it[k];
+      if(typeof v==='string')addIfRef(v);
+      else extractStrings(v,seen);
+    }
+  }
+  return used;
+}
+
 /* ═══════ COST ESTIMATION (v2) ═══════ */
 function eCost(p){
   if(!p)return 1;
@@ -401,6 +517,14 @@ function eCost(p){
   if(/\\operatorname\{join\}/.test(l))c+=2;
   if(/\\left\\\{/.test(l))c+=1;
   return c;
+}
+/* Cost severity tiers for qualitative display. Thresholds: critical>20, high>8, medium>3, else low. */
+const COST_CRITICAL=20,COST_HIGH=8,COST_MEDIUM=3;
+function costSeverity(cost){
+  if(cost>COST_CRITICAL)return'critical';
+  if(cost>COST_HIGH)return'high';
+  if(cost>COST_MEDIUM)return'medium';
+  return'low';
 }
 
 /* ═══════ FULL ANALYSIS ═══════ */
@@ -428,13 +552,34 @@ function analyze(state){
     const p=parseExpr(l);if(p?.isFunc)m.fn++;if(p?.isRec)m.rec++;
     parsed.push(p);
     const line=idx+1;
-    exprs.push({id:it.id,latex:l,fid:it.folderId,hidden:!!it.hidden,slider:!!it.slider,drag:it.dragMode,p,isMovPt,line,color:it.color,lineStyle:it.lineStyle,lineWidth:it.lineWidth,lineOpacity:it.lineOpacity,fillOpacity:it.fillOpacity,fill:it.fill,points:it.points,lines:it.lines,pointStyle:it.pointStyle,pointSize:it.pointSize});
+    exprs.push({id:it.id,latex:l,fid:it.folderId,hidden:!!it.hidden,slider:!!it.slider,drag:it.dragMode,p,isMovPt,line,color:it.color,lineStyle:it.lineStyle,lineWidth:it.lineWidth,lineOpacity:it.lineOpacity,fillOpacity:it.fillOpacity,fill:it.fill,points:it.points,lines:it.lines,pointStyle:it.pointStyle,pointSize:it.pointSize,pointOpacity:it.pointOpacity,showLabel:!!it.showLabel,label:it.label||'',labelSize:it.labelSize,labelOpacity:it.labelOpacity});
   });
 
   const lineMap={};
   for(const e of exprs)lineMap[e.p?.name||'#'+e.id]=e.line;
 
   const dep=buildDeps(parsed);
+  const usedByStyle=buildUsedByStyle(items,dep);
+  const usedByPolygon=new Set();
+  for(const e of exprs){
+    if(e.showLabel)continue;
+    if(!hasFillOrOpacity(e))continue;
+    if(!hasPolygon(e.latex)&&e.p?.type!=='display')continue;
+    const refs=e.p?.refs;
+    if(refs)for(const r of refs)if(dep.all.has(r))usedByPolygon.add(r);
+    const calls=e.p?.calls;
+    if(calls)for(const c of calls)if(dep.def[c.fn])usedByPolygon.add(c.fn);
+  }
+  const usedByLabel=new Set();
+  for(const e of exprs){
+    if(!e.showLabel)continue;
+    const refs=e.p?.refs;
+    if(refs)for(const r of refs)if(dep.all.has(r))usedByLabel.add(r);
+    const calls=e.p?.calls;
+    if(calls)for(const c of calls)if(dep.def[c.fn])usedByLabel.add(c.fn);
+    const labelRefs=extractLabelRefs(e.label,dep);
+    for(const r of labelRefs)usedByLabel.add(r);
+  }
 
   const interactables=[];
   for(const e of exprs){
@@ -461,7 +606,7 @@ function analyze(state){
   }}
   inputs.sort((a,b)=>b.cost-a.cost);
 
-  return{m,folders,exprs,parsed,dep,interactables,interactiveDownstream,inputs,lineMap,items,allItemsWithLine};
+  return{m,folders,exprs,parsed,dep,usedByStyle,usedByPolygon,usedByLabel,interactables,interactiveDownstream,inputs,lineMap,items,allItemsWithLine};
 }
 
 /* ═══════ SECTION 1: HEAVY EXPRESSIONS ═══════ */
@@ -531,25 +676,21 @@ function classifyHeavy(e,interactiveDownstream,dep){
 }
 
 function genHeavySection(a){
-  const heavy=a.exprs.filter(e=>e.p?.name!=='j_{uice}'&&eCost(e.p)>=COST_THRESHOLD).sort((x,y)=>eCost(y.p)-eCost(x.p));
-  if(heavy.length===0) return `<section id="sec-heavy"><h2><span class="section-icon">&#9888;&#65039;</span> Heavy Expressions</h2><div class="callout green"><strong>No computationally heavy expressions found.</strong> All expressions are below the cost threshold of ${COST_THRESHOLD}.</div></section>`;
+  const heavy=a.exprs.filter(e=>e.p?.name!=='j_{uice}'&&!hasPolygon(e.latex)&&eCost(e.p)>=COST_THRESHOLD).sort((x,y)=>eCost(y.p)-eCost(x.p));
+  if(heavy.length===0) return `<section id="sec-heavy"><h2><span class="section-icon">&#9888;&#65039;</span> Heavy Expressions</h2><div class="callout green"><strong>No computationally heavy expressions found.</strong> All expressions have low impact.</div></section>`;
 
   let h=`<section id="sec-heavy"><h2><span class="section-icon">&#9888;&#65039;</span> Heavy Expressions</h2>`;
-  h+=`<p class="desc">${heavy.length} expression(s) exceed the cost threshold of ${COST_THRESHOLD}. Polygon renderings are listed separately. Each is classified by whether its impact is on <span class="badge load" style="font-size:0.65rem">loading</span> the graph or on <span class="badge interact" style="font-size:0.65rem">interactivity</span> during use.</p>`;
+  h+=`<p class="desc">${heavy.length} expression(s) have high impact. Each is classified by whether its impact is on <span class="badge load" style="font-size:0.65rem">loading</span> the graph or on <span class="badge interact" style="font-size:0.65rem">interactivity</span> during use. Color indicates severity: <span class="cost-dot cost-critical"></span> critical, <span class="cost-dot cost-high"></span> high, <span class="cost-dot cost-medium"></span> medium, <span class="cost-dot cost-low"></span> low.</p>`;
 
   function renderHeavyCard(e){
     const info=classifyHeavy(e,a.interactiveDownstream,a.dep);
-    const cc=info.cost>20?'var(--red)':info.cost>8?'var(--orange)':'var(--yellow)';
+    const sev=costSeverity(info.cost);
     const impLabel=info.impact==='interact'?'Interactivity':info.impact==='load'?'Loading':'Both';
     const impClass=info.impact;
     let card=`<div class="heavy-card">`;
     const dispName=e.p?.name||'(display #'+e.id+')';
-    card+=`<div class="heavy-header"><span class="name" style="color:${cc}">${latexEl(dispName,e.line)}${e.line!=null?` <span style="color:var(--text-muted);font-size:0.8em">(line ${e.line})</span>`:''}</span>`;
-    card+=`<div class="badges"><span class="cost-pill" style="background:${cc.replace('var(--','rgba(').replace(')',',0.15)')};color:${cc}">${info.cost.toFixed(1)}</span>`;
-    card+=`<span class="badge ${impClass}">${impLabel}</span>`;
-    const styleStr=formatStyleInfo(e);
-    if(styleStr)card+=`<span class="badge" style="font-size:0.65rem;background:var(--surface)">${H(styleStr)}</span>`;
-    card+=`</div></div>`;
+    card+=`<div class="heavy-header"><span class="name cost-${sev}">${latexEl(dispName,e.line)}${e.line!=null?` <span style="color:var(--text-muted);font-size:0.8em">(line ${e.line})</span>`:''}</span>`;
+    card+=`<div class="badges"><span class="badge ${impClass}">${impLabel}</span></div></div>`;
     card+=`<div class="heavy-latex">${latexEl(e.latex,e.line)}</div>`;
     card+=`<div class="heavy-why"><strong style="color:var(--text);font-size:0.82rem">Why it's heavy:</strong> ${info.patterns.join(', ')}. `;
     if(info.impact==='interact') card+=`This expression recalculates every time a user drags or adjusts an interactive element, directly affecting frame rate.`;
@@ -572,39 +713,78 @@ function genHeavySection(a){
   return h;
 }
 
+function rhsIsOnlyCurlyBracketSegments(rhs){
+  if(!rhs||typeof rhs!=='string')return false;
+  let s=rhs.trim();
+  while(s.includes('\\left\\{')){
+    const start=s.indexOf('\\left\\{');
+    let depth=1,i=start+7;
+    while(i<s.length&&depth>0){
+      if(s.startsWith('\\left\\{',i)){depth++;i+=7;continue}
+      if(s.startsWith('\\right\\}',i)){depth--;i+=8;continue}
+      i++;
+    }
+    if(depth!==0)return false;
+    s=(s.slice(0,start)+s.slice(i)).trim();
+  }
+  return s.length===0;
+}
+function isBooleanVariable(e){
+  if(!e?.p?.name||e.p?.isFunc)return false;
+  const rhs=e.p?.rhs??(e.latex||'').replace(/^[^=]*=/, '');
+  return rhsIsOnlyCurlyBracketSegments(rhs);
+}
 function findCustomFunctions(a){
-  return a.exprs.filter(e=>e.p?.isFunc).map(e=>({
+  return a.exprs.filter(e=>e.p?.isFunc||isBooleanVariable(e)).map(e=>({
     cost:eCost(e.p),latex:e.latex,hidden:!!e.hidden,line:e.line,
     dependsOn:e.p?.name?[...(a.dep.on[e.p.name]||[])]:(e.p?.refs?[...(e.p.refs||[])].filter(r=>a.dep.def[r]):[]),
-    name:e.p?.name,params:e.p?.params||[],isRec:!!e.p?.isRec,expr:e
-  })).sort((a,b)=>b.cost-a.cost);
+    name:e.p?.name,params:e.p?.params||[],isRec:!!e.p?.isRec,isBoolean:!!isBooleanVariable(e),expr:e
+  })).sort((a,b)=>(a.name||'').localeCompare(b.name||'',undefined,{sensitivity:'base'}));
 }
 
 function genCustomFunctionsSection(a){
   const funcs=findCustomFunctions(a);
-  let h=`<section id="sec-custom-fns"><h2><span class="section-icon">&#128295;</span> Custom Functions</h2>`;
-  h+=`<p class="desc">User-defined functions (e.g. <code>f(x)=x^2</code>).</p>`;
+  const functions=funcs.filter(u=>!u.isBoolean),booleans=funcs.filter(u=>u.isBoolean);
+  let h=`<section id="sec-custom-fns"><h2><span class="section-icon">&#128295;</span> Custom Functions and Booleans</h2>`;
+  h+=`<p class="desc">User-defined functions (e.g. <code>f(x)=x^2</code>) and variables whose RHS is only curly-bracket segments (e.g. <code>a=\\left\\{x>0:1\\right\\}</code>), labeled as Booleans.</p>`;
   if(funcs.length===0){
-    h+=`<div class="callout accent"><strong>No custom functions found.</strong></div>`;
+    h+=`<div class="callout accent"><strong>No custom functions or booleans found.</strong></div>`;
     h+=`</section>`;
     return h;
   }
   const lm=a.lineMap||{};
-  h+=`<div class="card open" id="card-custom-fns"><div class="card-header" onclick="toggleCard('card-custom-fns')"><h3>Custom Functions (${funcs.length})</h3>${chevSvg}</div><div class="card-body">`;
-  h+=`<table class="pattern-table"><thead><tr><th>Line</th><th>Name</th><th>Cost</th><th>Depends On</th><th>LaTeX</th></tr></thead><tbody>`;
-  for(const u of funcs){
-    const cc=u.cost>8?'var(--red)':u.cost>3?'var(--orange)':'var(--text-muted)';
-    const deps=u.dependsOn.length>0?u.dependsOn.slice(0,4).map(d=>eiRef(d,lm[d])).join(', ')+(u.dependsOn.length>4?' +<span style="opacity:0.6">'+(u.dependsOn.length-4)+' more</span>':''):'<span style="color:var(--text-muted);font-style:italic">none</span>';
-    const recBadge=u.isRec?' <span class="badge" style="font-size:0.6rem;background:var(--orange)">recursive</span>':'';
-    h+=`<tr${u.hidden?' style="opacity:0.5"':''}>`;
-    h+=`<td style="font-family:var(--mono);color:var(--text-muted)">${u.line??'—'}</td>`;
-    h+=`<td>${u.name?eiRef(u.name,lm[u.name]):`<span style="font-style:italic">display #${u.expr.id}</span>`}${recBadge}${u.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
-    h+=`<td style="font-family:var(--mono);color:${cc}">${u.cost.toFixed(1)}</td>`;
-    h+=`<td style="font-size:0.78rem">${deps}</td>`;
-    h+=`<td>${latexEl(u.latex,u.line)}</td>`;
-    h+=`</tr>`;
+  h+=`<div class="card open" id="card-custom-fns"><div class="card-header" onclick="toggleCard('card-custom-fns')"><h3>Custom Functions and Booleans (${funcs.length})</h3>${chevSvg}</div><div class="card-body">`;
+  function renderFuncTable(list){
+    let out='';
+    for(const u of list){
+      const sev=costSeverity(u.cost);
+      const deps=u.dependsOn.length>0?u.dependsOn.slice(0,4).map(d=>eiRef(d,lm[d])).join(', ')+(u.dependsOn.length>4?' +<span style="opacity:0.6">'+(u.dependsOn.length-4)+' more</span>':''):'<span style="color:var(--text-muted);font-style:italic">none</span>';
+      const typeLabel=u.isBoolean?'Boolean':'function';
+      const recBadge=u.isRec?' <span class="badge" style="font-size:0.6rem;background:var(--orange)">recursive</span>':'';
+      out+=`<tr${u.hidden?' style="opacity:0.5"':''}>`;
+      out+=`<td style="font-family:var(--mono);color:var(--text-muted)">${u.line??'—'}</td>`;
+      out+=`<td>${u.name?eiRef(u.name,lm[u.name]):`<span style="font-style:italic">display #${u.expr.id}</span>`}${recBadge}${u.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
+      out+=`<td><span class="badge" style="font-size:0.65rem;background:${u.isBoolean?'var(--teal-glow)':'var(--accent-glow)'};color:${u.isBoolean?'var(--teal)':'var(--accent)'}">${typeLabel}</span></td>`;
+      out+=`<td><span class="cost-dot cost-${sev}" title="${sev}"></span></td>`;
+      out+=`<td style="font-size:0.78rem">${deps}</td>`;
+      out+=`<td>${latexEl(u.latex,u.line)}</td>`;
+      out+=`</tr>`;
+    }
+    return out;
   }
-  h+=`</tbody></table></div></div></section>`;
+  if(functions.length>0){
+    h+=`<h4 class="custom-fn-subsection" style="margin:0 0 0.5rem 0;font-size:0.9rem;color:var(--text);font-weight:600">Functions (${functions.length})</h4>`;
+    h+=`<table class="pattern-table"><thead><tr><th>Line</th><th>Name</th><th>Type</th><th>Impact</th><th>Depends On</th><th>LaTeX</th></tr></thead><tbody>`;
+    h+=renderFuncTable(functions);
+    h+=`</tbody></table>`;
+  }
+  if(booleans.length>0){
+    h+=`<h4 class="custom-fn-subsection" style="margin:${functions.length>0?'1.25rem 0 0.5rem 0':'0 0 0.5rem 0'};font-size:0.9rem;color:var(--text);font-weight:600">Booleans (${booleans.length})</h4>`;
+    h+=`<table class="pattern-table"><thead><tr><th>Line</th><th>Name</th><th>Type</th><th>Impact</th><th>Depends On</th><th>LaTeX</th></tr></thead><tbody>`;
+    h+=renderFuncTable(booleans);
+    h+=`</tbody></table>`;
+  }
+  h+=`</div></div></section>`;
   return h;
 }
 
@@ -777,7 +957,7 @@ function renderTree(name,dep,dir,visited,depth,maxDepth,maxChildren,lineMap){
   if(!dep.def[name])return'';
   const id='tn'+(_tnId++);
   const p=dep.def[name];const cost=eCost(p);
-  const cc=cost>20?'red':cost>8?'orange':cost>3?'yellow':'text-muted';
+  const sev=costSeverity(cost);
   const children=dir==='down'?[...(dep.by[name]||[])]:[...(dep.on[name]||[])];
   children.sort((a,b)=>eCost(dep.def[b])-eCost(dep.def[a]));
   const line=lineMap?.[name];
@@ -789,8 +969,8 @@ function renderTree(name,dep,dir,visited,depth,maxDepth,maxChildren,lineMap){
   if(hasKids)h+=`<span class="arrow">▼</span>`;
   else if(children.length>0&&depth>=maxDepth)h+=`<span class="arrow" style="opacity:0.3;font-size:0.6rem">⋯</span>`;
   else h+=`<span class="arrow" style="opacity:0.2">·</span>`;
-  h+=`<span class="nm" style="color:var(--${cc})">${latexEl(name,line)}${line!=null?` <span style="color:var(--text-muted);font-size:0.75em">(line ${line})</span>`:''}</span>`;
-  h+=`<span class="ct" style="color:var(--${cc})">${cost.toFixed(1)}</span>`;
+  h+=`<span class="nm cost-${sev}">${latexEl(name,line)}${line!=null?` <span style="color:var(--text-muted);font-size:0.75em">(line ${line})</span>`:''}</span>`;
+  h+=`<span class="cost-dot cost-${sev}" title="${sev}"></span>`;
   if(p?.isFunc)h+=`<span class="tg" style="background:var(--accent-glow);color:var(--accent)">fn</span>`;
   if(p?.isImplicit)h+=`<span class="tg" style="background:var(--teal-glow,var(--accent-glow));color:var(--teal,var(--accent))">implicit</span>`;
   if(p?.isRec)h+=`<span class="tg" style="background:var(--red-glow);color:var(--red)">rec</span>`;
@@ -822,9 +1002,9 @@ function genInteractableSection(a){
     const cid='card-ia'+i;
     h+=`<div class="card${open}" id="${cid}"><div class="card-header" onclick="toggleCard('${cid}')"><h3>`;
     const lm=a.lineMap||{};
-    h+=`<span class="badge ${sevClass}">${ia.type}</span> ${eiRef(ia.name,lm[ia.name])} &mdash; ${ia.count} dependent(s), cost ${ia.cost.toFixed(1)}`;
+    h+=`<span class="badge ${sevClass}">${ia.type}</span> ${eiRef(ia.name,lm[ia.name])} &mdash; ${ia.count} dependent(s)`;
     h+=`</h3>${chevSvg}</div><div class="card-body">`;
-    h+=`<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem">When ${eiRef(ia.name,lm[ia.name])} changes, <strong>${ia.count}</strong> expression(s) recalculate with a total triggered cost of <strong style="color:${ia.cost>50?'var(--red)':ia.cost>20?'var(--orange)':'var(--green)'}">${ia.cost.toFixed(1)}</strong>.</div>`;
+    h+=`<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem">When ${eiRef(ia.name,lm[ia.name])} changes, <strong>${ia.count}</strong> expression(s) recalculate <span class="cost-${costSeverity(ia.cost)}">(<span class="cost-dot cost-${costSeverity(ia.cost)}"></span> ${costSeverity(ia.cost)} impact)</span>.</div>`;
     _tnId=0;
     h+=`<div class="dep-tree"><ul>${renderTree(ia.name,a.dep,'down',new Set(),0,6,15,lm)}</ul></div>`;
     h+=`</div></div>`;
@@ -865,11 +1045,17 @@ function findUnused(a){
   const unused=[];
   for(const e of a.exprs){
     const p=e.p;
+    if(e.showLabel)continue;
+    if(isBooleanVariable(e))continue;
+    if(p?.isFunc)continue;
     if(p?.name){
       if(p.type==='action')continue;
       if(p.isImplicit)continue;
       if(e.latex&&e.latex.includes('\\operatorname{polygon}'))continue;
       if(exprUsesColor(e))continue;
+      if(a.usedByStyle?.has(p.name))continue;
+      if(a.usedByPolygon?.has(p.name))continue;
+      if(a.usedByLabel?.has(p.name))continue;
       const depBy=a.dep.by[p.name];
       if(depBy&&depBy.size>0)continue;
       if(a.dep.calledBy[p.name]?.length)continue;
@@ -879,34 +1065,58 @@ function findUnused(a){
       const cost=eCost(p);
       const dependsOn=[...(a.dep.on[p.name]||[])];
       unused.push({kind:'unreferenced',name:p.name,cost,latex:e.latex,isFunc:!!p.isFunc,hidden:!!e.hidden,dependsOn,line:e.line});
-    }else if(p?.type==='display'&&isNumericalConstant(e.latex)){
-      const cost=eCost(p);
-      unused.push({kind:'inline_number',name:null,cost,latex:e.latex,isFunc:false,hidden:!!e.hidden,dependsOn:[],line:e.line});
     }
   }
   unused.sort((a,b)=>b.cost-a.cost);
   return unused;
 }
 
-function findUnstoredCalls(a){
-  const calls=[];
+function hasPolygon(latex){return latex&&latex.includes('polygon');}
+function hasFillOrOpacity(e){return e&&(e.fill!=null||e.fillOpacity!=null||e.lineOpacity!=null||e.pointOpacity!=null||e.lineWidth!=null);}
+function findPolygonExpressions(a){
+  return a.exprs.filter(e=>!e.showLabel&&hasFillOrOpacity(e)&&(hasPolygon(e.latex)||(e.p?.type==='display'&&!isNumericalConstant(e.latex)))).map(e=>({
+    cost:eCost(e.p),latex:e.latex,hidden:!!e.hidden,line:e.line,name:e.p?.name,
+    dependsOn:e.p?.name?[...(a.dep.on[e.p.name]||[])]:(e.p?.refs?[...(e.p.refs||[])].filter(r=>a.dep.def[r]):[]),
+    exprId:e.id
+  })).sort((a,b)=>b.cost-a.cost);
+}
+function findUnstoredValues(a){
+  const values=[];
   for(const e of a.exprs){
     const p=e.p;
     if(p?.isImplicit)continue;
-    if(!p?.calls||p.calls.length===0)continue;
-    const rhs=p.rhs||e.latex;
-    const callStored=(p.name&&p.calls.length===1&&!hasTopLevelOp(rhs));
-    if(!callStored){
-      for(const c of p.calls){
-        if(c.fn==='j_{uice}'||!a.dep.def[c.fn])continue;
-        const callStr=c.fn+'('+c.args.map(x=>x.trim()).join(', ')+')';
-        const cost=eCost(a.dep.def[c.fn]);
-        calls.push({kind:'unstored_call',name:null,cost,latex:callStr,call:c,fn:c.fn,inExpr:p?.name||null,isFunc:false,hidden:!!e.hidden,dependsOn:[],line:e.line});
+    if(p?.type==='action')continue;
+    if(p?.isRec)continue;
+    if(hasPolygon(e.latex))continue;
+    if(p?.type==='display'){
+      if(isNumericalConstant(e.latex)){
+        values.push({kind:'display',cost:eCost(p),latex:e.latex,hidden:!!e.hidden,dependsOn:[],line:e.line,exprId:e.id,inExpr:null});
+      }
+      if(p?.calls&&p.calls.length>0){
+        for(const c of p.calls){
+          if(c.fn==='j_{uice}'||c.fn==='polygon'||!a.dep.def[c.fn])continue;
+          const callStr=c.fn+'('+c.args.map(x=>x.trim()).join(', ')+')';
+          const cost=eCost(a.dep.def[c.fn]);
+          values.push({kind:'function_call',cost,latex:callStr,call:c,fn:c.fn,inExpr:null,hidden:!!e.hidden,dependsOn:[],line:e.line,exprId:e.id});
+        }
+      }
+      continue;
+    }
+    if(p?.calls&&p.calls.length>0){
+      const rhs=p.rhs||e.latex;
+      const callStored=(p.name&&p.calls.length===1&&!hasTopLevelOp(rhs));
+      if(!callStored){
+        for(const c of p.calls){
+          if(c.fn==='j_{uice}'||c.fn==='polygon'||!a.dep.def[c.fn])continue;
+          const callStr=c.fn+'('+c.args.map(x=>x.trim()).join(', ')+')';
+          const cost=eCost(a.dep.def[c.fn]);
+          values.push({kind:'function_call',cost,latex:callStr,call:c,fn:c.fn,inExpr:p?.name||null,hidden:!!e.hidden,dependsOn:[],line:e.line,exprId:e.id});
+        }
       }
     }
   }
-  calls.sort((a,b)=>b.cost-a.cost);
-  return calls;
+  values.sort((a,b)=>b.cost-a.cost);
+  return values;
 }
 
 function findColorCalls(latex){
@@ -941,34 +1151,41 @@ function exprUsesColor(e){
   return false;
 }
 
+function isRegression(latex){return latex&&(latex.includes('~')||latex.includes('\\sim'));}
 function findImplicitFunctions(a){
-  return a.exprs.filter(e=>e.p?.isImplicit).map(e=>({
-    name:e.p.name,cost:eCost(e.p),latex:e.latex,hidden:!!e.hidden,
-    dependsOn:[...(a.dep.on[e.p.name]||[])],line:e.line
-  })).sort((a,b)=>b.cost-a.cost);
+  return a.exprs.filter(e=>e.p?.isImplicit||isRegression(e.latex)).map(e=>{
+    const m=e.latex&&e.latex.match(/^(.+?)(?:~|\\sim)/);
+    const name=e.p?.name||(m?m[1].trim():null)||'—';
+    return{
+      name,cost:eCost(e.p),latex:e.latex,hidden:!!e.hidden,
+      dependsOn:[...(a.dep.on[e.p?.name]||[])],line:e.line,
+      isRegression:isRegression(e.latex)
+    };
+  }).sort((a,b)=>b.cost-a.cost);
 }
 
 function genImplicitSection(a){
   const impl=findImplicitFunctions(a);
-  let h=`<section id="sec-implicit"><h2><span class="section-icon">&#128202;</span> Implicit Functions</h2>`;
-  h+=`<p class="desc">Expressions of the form <code>y = ...</code> or <code>x = ...</code> that define implicit relationships (curves, vertical/horizontal lines). These are plotted directly by Desmos.</p>`;
+  let h=`<section id="sec-implicit"><h2><span class="section-icon">&#128202;</span> Implicit Expressions and Regressions</h2>`;
+  h+=`<p class="desc">Implicit expressions of the form <code>y = ...</code> or <code>x = ...</code> that define curves or lines. Regressions (expressions containing <code>~</code>) fit a model to data and are also plotted by Desmos.</p>`;
 
   if(impl.length===0){
-    h+=`<div class="callout accent"><strong>No implicit functions found.</strong> This graph has no <code>y=</code> or <code>x=</code> expressions.</div>`;
+    h+=`<div class="callout accent"><strong>No implicit expressions or regressions found.</strong> This graph has no <code>y=</code> or <code>x=</code> expressions and no regression expressions (<code>~</code>).</div>`;
     h+=`</section>`;
     return h;
   }
 
-  h+=`<div class="card open" id="card-implicit"><div class="card-header" onclick="toggleCard('card-implicit')"><h3>Implicit Functions (${impl.length})</h3>${chevSvg}</div><div class="card-body">`;
-  h+=`<table class="pattern-table"><thead><tr><th>Name</th><th>Cost</th><th>Depends On</th><th>LaTeX</th></tr></thead><tbody>`;
+  h+=`<div class="card open" id="card-implicit"><div class="card-header" onclick="toggleCard('card-implicit')"><h3>Implicit Expressions and Regressions (${impl.length})</h3>${chevSvg}</div><div class="card-body">`;
+  h+=`<table class="pattern-table"><thead><tr><th>Name</th><th>Type</th><th>Impact</th><th>Depends On</th><th>LaTeX</th></tr></thead><tbody>`;
 
   const lm=a.lineMap||{};
   for(const u of impl){
-    const cc=u.cost>8?'var(--red)':u.cost>3?'var(--orange)':'var(--text-muted)';
+    const sev=costSeverity(u.cost);
     const deps=u.dependsOn.length>0?u.dependsOn.slice(0,4).map(d=>eiRef(d,lm[d])).join(', ')+(u.dependsOn.length>4?' +<span style="opacity:0.6">'+(u.dependsOn.length-4)+' more</span>':''):'<span style="color:var(--text-muted);font-style:italic">none</span>';
     h+=`<tr${u.hidden?' style="opacity:0.5"':''}>`;
-    h+=`<td>${eiRef(u.name,lm[u.name])}${u.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
-    h+=`<td style="font-family:var(--mono);color:${cc}">${u.cost.toFixed(1)}</td>`;
+    h+=`<td>${eiRef(u.name,lm[u.name]??u.line)}${u.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
+    h+=`<td><span class="badge" style="font-size:0.65rem;background:${u.isRegression?'var(--accent-glow)':'rgba(92,200,212,0.15)'};color:${u.isRegression?'var(--accent)':'var(--teal)'}">${u.isRegression?'regression':'implicit'}</span></td>`;
+    h+=`<td><span class="cost-dot cost-${sev}" title="${sev}"></span></td>`;
     h+=`<td style="font-size:0.78rem">${deps}</td>`;
     h+=`<td>${latexEl(u.latex,u.line)}</td>`;
     h+=`</tr>`;
@@ -996,15 +1213,58 @@ function genActionsSection(a){
 
   const lm=a.lineMap||{};
   h+=`<div class="card open" id="card-actions"><div class="card-header" onclick="toggleCard('card-actions')"><h3>Actions (${actions.length})</h3>${chevSvg}</div><div class="card-body">`;
-  h+=`<table class="pattern-table"><thead><tr><th>Line</th><th>Cost</th><th>Style</th><th>LaTeX</th></tr></thead><tbody>`;
+  h+=`<table class="pattern-table"><thead><tr><th>Line</th><th>Impact</th><th>Style</th><th>LaTeX</th></tr></thead><tbody>`;
   for(const u of actions){
-    const cc=u.cost>8?'var(--red)':u.cost>3?'var(--orange)':'var(--text-muted)';
+    const sev=costSeverity(u.cost);
     const styleStr=formatStyleInfo(u.expr);
     h+=`<tr${u.hidden?' style="opacity:0.5"':''}>`;
     h+=`<td style="font-family:var(--mono);color:var(--text-muted)">${u.line??'—'}</td>`;
-    h+=`<td style="font-family:var(--mono);color:${cc}">${u.cost.toFixed(1)}</td>`;
+    h+=`<td><span class="cost-dot cost-${sev}" title="${sev}"></span></td>`;
     h+=`<td style="font-size:0.72rem;color:var(--text-muted)">${styleStr?H(styleStr):'—'}</td>`;
     h+=`<td>${latexEl(u.latex,u.line)}${u.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
+    h+=`</tr>`;
+  }
+  h+=`</tbody></table></div></div></section>`;
+  return h;
+}
+
+function findLabelExpressions(a){
+  return a.exprs.filter(e=>e.showLabel).map(e=>({
+    cost:eCost(e.p),latex:e.latex,hidden:!!e.hidden,line:e.line,label:e.label,
+    labelSize:e.labelSize,labelOpacity:e.labelOpacity,pointSize:e.pointSize,pointOpacity:e.pointOpacity,lineOpacity:e.lineOpacity,
+    name:e.p?.name,dependsOn:e.p?.name?[...(a.dep.on[e.p.name]||[])]:(e.p?.refs?[...(e.p.refs||[])].filter(r=>a.dep.def[r]):[]),
+    expr:e
+  })).sort((a,b)=>(a.line??999)-(b.line??999));
+}
+
+function genLabelsSection(a){
+  const labels=findLabelExpressions(a);
+  let h=`<section id="sec-labels"><h2><span class="section-icon">&#128278;</span> Labels</h2>`;
+  h+=`<p class="desc">Expressions with an enabled label that displays text on the graph (e.g. point labels). These are visible annotations that can affect layout and readability.</p>`;
+  if(labels.length===0){
+    h+=`<div class="callout accent"><strong>No labeled expressions found.</strong> Enable labels on points or other expressions in Desmos to see them here.</div>`;
+    h+=`</section>`;
+    return h;
+  }
+  const lm=a.lineMap||{};
+  h+=`<div class="card open" id="card-labels"><div class="card-header" onclick="toggleCard('card-labels')"><h3>Labels (${labels.length})</h3>${chevSvg}</div><div class="card-body">`;
+  h+=`<table class="pattern-table"><thead><tr><th>Line</th><th>Name</th><th>Label Text</th><th>Opacity</th><th>Size</th><th>Impact</th><th>Depends On</th><th>LaTeX</th></tr></thead><tbody>`;
+  for(const u of labels){
+    const sev=costSeverity(u.cost);
+    const deps=u.dependsOn.length>0?u.dependsOn.slice(0,4).map(d=>eiRef(d,lm[d])).join(', ')+(u.dependsOn.length>4?' +<span style="opacity:0.6">'+(u.dependsOn.length-4)+' more</span>':''):'<span style="color:var(--text-muted);font-style:italic">none</span>';
+    const opacityVal=u.labelOpacity??u.pointOpacity??u.lineOpacity;
+    const opacityStr=opacityVal!=null&&opacityVal!==undefined?String(opacityVal):'1';
+    const sizeVal=u.labelSize??u.pointSize;
+    const sizeStr=sizeVal!=null&&sizeVal!==undefined?String(sizeVal):'—';
+    h+=`<tr${u.hidden?' style="opacity:0.5"':''}>`;
+    h+=`<td style="font-family:var(--mono);color:var(--text-muted)">${u.line??'—'}</td>`;
+    h+=`<td>${u.name?eiRef(u.name,lm[u.name]):`<span style="font-style:italic">display #${u.expr.id}</span>`}${u.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
+    h+=`<td style="font-size:0.85rem">${u.label?H(u.label):'<span style="color:var(--text-muted);font-style:italic">(coordinates)</span>'}</td>`;
+    h+=`<td style="font-size:0.78rem;font-family:var(--mono)">${opacityStr}</td>`;
+    h+=`<td style="font-size:0.78rem;font-family:var(--mono)">${sizeStr}</td>`;
+    h+=`<td><span class="cost-dot cost-${sev}" title="${sev}"></span></td>`;
+    h+=`<td style="font-size:0.78rem">${deps}</td>`;
+    h+=`<td>${latexEl(u.latex,u.line)}</td>`;
     h+=`</tr>`;
   }
   h+=`</tbody></table></div></div></section>`;
@@ -1015,26 +1275,20 @@ function findOtherItems(a){
   const exprIdsInSection=new Set();
   for(const e of a.exprs)if(e.p?.name&&a.dep.all.has(e.p.name))exprIdsInSection.add(e.id);
   for(const e of a.exprs)if(eCost(e.p)>=COST_THRESHOLD)exprIdsInSection.add(e.id);
-  for(const e of a.exprs)if(e.p?.isFunc)exprIdsInSection.add(e.id);
+  for(const e of a.exprs)if(e.p?.isFunc||isBooleanVariable(e))exprIdsInSection.add(e.id);
+  for(const e of a.exprs)if(e.showLabel)exprIdsInSection.add(e.id);
   for(const ia of a.interactables)if(ia.expr)exprIdsInSection.add(ia.expr.id);
-  for(const e of a.exprs)if(e.p?.isImplicit)exprIdsInSection.add(e.id);
+  for(const e of a.exprs)if(e.p?.isImplicit||isRegression(e.latex))exprIdsInSection.add(e.id);
   for(const e of a.exprs)if(e.p?.type==='action')exprIdsInSection.add(e.id);
   const unused=findUnused(a);
   for(const u of unused){
     if(u.name){const e=a.exprs.find(x=>x.p?.name===u.name);if(e)exprIdsInSection.add(e.id);}
     else{const e=a.exprs.find(x=>x.p?.type==='display'&&isNumericalConstant(x.latex)&&x.line===u.line);if(e)exprIdsInSection.add(e.id);}
   }
-  for(const e of a.exprs){
-    const p=e.p;
-    if(!p?.calls||p.calls.length===0)continue;
-    const rhs=p.rhs||e.latex;
-    const callStored=p.name&&p.calls.length===1&&!hasTopLevelOp(rhs);
-    if(!callStored){
-      for(const c of p.calls){
-        if(a.dep.def[c.fn]){exprIdsInSection.add(e.id);break;}
-      }
-    }
-  }
+  const unstoredValues=findUnstoredValues(a);
+  for(const u of unstoredValues)if(u.exprId!=null)exprIdsInSection.add(u.exprId);
+  const polygons=findPolygonExpressions(a);
+  for(const p of polygons)if(p.exprId!=null)exprIdsInSection.add(p.exprId);
   const reusable=findReusableExpressions(a.exprs,a.dep);
   for(const[,owners]of reusable){
     for(const o of owners){
@@ -1044,7 +1298,7 @@ function findOtherItems(a){
   }
   const otherExprs=a.exprs.filter(e=>!exprIdsInSection.has(e.id)&&e.latex&&String(e.latex).trim());
   const allItems=a.allItemsWithLine||a.items?.map((it,i)=>({...it,line:i+1}))||[];
-  const otherNonExprs=allItems.filter(it=>it.type!=='expression'&&it.type!=='folder'&&it.type!=='text');
+  const otherNonExprs=allItems.filter(it=>it.type!=='expression'&&it.type!=='folder'&&it.type!=='text'&&it.type!=='image');
   const result=[];
   for(const e of otherExprs)result.push({kind:'expr',expr:e,line:e.line});
   for(const it of otherNonExprs)result.push({kind:'item',item:it,line:it.line});
@@ -1056,18 +1310,17 @@ function genOtherExpressionsSection(a){
   const other=findOtherItems(a);
   const lm=a.lineMap||{};
   let h=`<section id="sec-other"><h2><span class="section-icon">&#128196;</span> Other Items</h2>`;
-  h+=`<p class="desc">Expressions and items that do not fit into the categories above: referenced definitions, display expressions, images, tables, and other graph lines not classified elsewhere.</p>`;
+  h+=`<p class="desc">Expressions and items that do not fit into the categories above: referenced definitions, display expressions, tables, and other graph lines not classified elsewhere. Images are in the Images section.</p>`;
   if(other.length===0){
     h+=`<div class="callout green"><strong>Every line is covered by the sections above.</strong></div>`;
     h+=`</section>`;return h;
   }
   h+=`<div class="card open" id="card-other"><div class="card-header" onclick="toggleCard('card-other')"><h3>Other Items (${other.length})</h3>${chevSvg}</div><div class="card-body">`;
-  h+=`<table class="pattern-table"><thead><tr><th>Line</th><th>Type</th><th>Name / Expression</th><th>Cost</th><th>Depends On</th><th>Style</th><th>LaTeX / Details</th></tr></thead><tbody>`;
+  h+=`<table class="pattern-table"><thead><tr><th>Line</th><th>Type</th><th>Name / Expression</th><th>Impact</th><th>Depends On</th><th>Style</th><th>LaTeX / Details</th></tr></thead><tbody>`;
   for(const o of other){
     if(o.kind==='expr'){
       const e=o.expr;
-      const cost=eCost(e.p);
-      const cc=cost>8?'var(--red)':cost>3?'var(--orange)':'var(--text-muted)';
+      const sev=costSeverity(eCost(e.p));
       const deps=e.p?.name?[...(a.dep.on[e.p.name]||[])]:(e.p?.refs?[...(e.p.refs||[])].filter(r=>a.dep.def[r]):[]);
       const depsStr=deps.length>0?deps.slice(0,4).map(d=>eiRef(d,lm[d])).join(', ')+(deps.length>4?' +<span style="opacity:0.6">'+(deps.length-4)+' more</span>':''):'<span style="color:var(--text-muted);font-style:italic">none</span>';
       const styleStr=formatStyleInfo(e);
@@ -1075,7 +1328,7 @@ function genOtherExpressionsSection(a){
       h+=`<td style="font-family:var(--mono);color:var(--text-muted)">${o.line??'—'}</td>`;
       h+=`<td><span class="badge" style="font-size:0.7rem;background:var(--surface)">expression</span></td>`;
       h+=`<td>${e.p?.name?eiRef(e.p.name,lm[e.p.name]):`<span style="font-style:italic">display #${e.id}</span>`}${e.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
-      h+=`<td style="font-family:var(--mono);color:${cc}">${cost.toFixed(1)}</td>`;
+      h+=`<td><span class="cost-dot cost-${sev}" title="${sev}"></span></td>`;
       h+=`<td style="font-size:0.78rem">${depsStr}</td>`;
       h+=`<td style="font-size:0.72rem;color:var(--text-muted)">${styleStr?H(styleStr):'—'}</td>`;
       h+=`<td>${latexEl(e.latex||'(empty)',e.line)}</td>`;
@@ -1099,44 +1352,116 @@ function genOtherExpressionsSection(a){
   return h;
 }
 
-function genUnstoredCallsSection(a){
-  const calls=findUnstoredCalls(a);
-  const totalCost=calls.reduce((s,u)=>s+u.cost,0);
+function genPolygonSection(a){
+  const polygons=findPolygonExpressions(a);
+  let h=`<section id="sec-polygons"><h2><span class="section-icon">&#11036;</span> Polygons &amp; Graph Objects</h2>`;
+  h+=`<p class="desc">Display expressions (values shown without assignment) and expressions that use <code>polygon</code> to render shapes. These are plotted directly by Desmos and represent visual objects rather than computed values to store.</p>`;
+  if(polygons.length===0){
+    h+=`<div class="callout accent"><strong>No polygon expressions found.</strong> This graph has no <code>polygon</code> calls.</div>`;
+    h+=`</section>`;
+    return h;
+  }
+  const visible=polygons.filter(p=>!p.hidden),hidden=polygons.filter(p=>p.hidden);
+  h+=`<div class="card open" id="card-polygons"><div class="card-header" onclick="toggleCard('card-polygons')"><h3>Polygons &amp; Graph Objects (${polygons.length})</h3>${chevSvg}</div><div class="card-body">`;
+  const lm=a.lineMap||{};
+  function renderPolygonTable(list){
+    let out='';
+    for(const p of list){
+      const sev=costSeverity(p.cost);
+      const depsStr=p.dependsOn.length>0?p.dependsOn.slice(0,4).map(d=>eiRef(d,lm[d])).join(', ')+(p.dependsOn.length>4?' +<span style="opacity:0.6">'+(p.dependsOn.length-4)+' more</span>':''):'<span style="color:var(--text-muted);font-style:italic">none</span>';
+      out+=`<tr${p.hidden?' style="opacity:0.5"':''}>`;
+      out+=`<td style="font-family:var(--mono);color:var(--text-muted)">${p.line??'—'}</td>`;
+      out+=`<td>${p.name?eiRef(p.name,lm[p.name]):'<span style="font-style:italic">display</span>'}${p.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
+      out+=`<td><span class="cost-dot cost-${sev}" title="${sev}"></span></td>`;
+      out+=`<td style="font-size:0.78rem">${depsStr}</td>`;
+      out+=`<td>${latexEl(p.latex,p.line)}</td>`;
+      out+=`</tr>`;
+    }
+    return out;
+  }
+  if(visible.length>0){
+    h+=`<h4 class="polygon-subsection" style="margin:0 0 0.5rem 0;font-size:0.9rem;color:var(--text);font-weight:600">Visible (${visible.length})</h4>`;
+    h+=`<table class="pattern-table"><thead><tr><th>Line</th><th>Name</th><th>Impact</th><th>Depends On</th><th>LaTeX</th></tr></thead><tbody>`;
+    h+=renderPolygonTable(visible);
+    h+=`</tbody></table>`;
+  }
+  if(hidden.length>0){
+    h+=`<h4 class="polygon-subsection" style="margin:${visible.length>0?'1.25rem 0 0.5rem 0':'0 0 0.5rem 0'};font-size:0.9rem;color:var(--text-muted);font-weight:600">Hidden (${hidden.length})</h4>`;
+    h+=`<table class="pattern-table"><thead><tr><th>Line</th><th>Name</th><th>Impact</th><th>Depends On</th><th>LaTeX</th></tr></thead><tbody>`;
+    h+=renderPolygonTable(hidden);
+    h+=`</tbody></table>`;
+  }
+  h+=`</div></div></section>`;
+  return h;
+}
 
-  let h=`<section id="sec-unstored-calls"><h2><span class="section-icon">&#128260;</span> Unstored Function Calls</h2>`;
-  h+=`<p class="desc">Function calls whose result is not stored in a variable (e.g. <code>f(x)</code> used inline in <code>y = f(x) + 1</code>). Each occurrence recomputes the function. Storing the result in a variable (e.g. <code>a = f(x)</code>, then <code>y = a + 1</code>) can improve performance when the call is expensive or repeated.</p>`;
+function findImageItems(a){
+  const allItems=a.allItemsWithLine||a.items?.map((it,i)=>({...it,line:i+1}))||[];
+  return allItems.filter(it=>it.type==='image').sort((a,b)=>(a.line??999)-(b.line??999));
+}
 
-  if(calls.length===0){
-    h+=`<div class="callout green"><strong>No unstored function calls found.</strong> Every function call result is stored in a variable.</div>`;
+function genImagesSection(a){
+  const images=findImageItems(a);
+  let h=`<section id="sec-images"><h2><span class="section-icon">&#128247;</span> Images</h2>`;
+  h+=`<p class="desc">Image expressions added to the graph. Each image is rendered by Desmos and contributes to rendering load when visible.</p>`;
+  if(images.length===0){
+    h+=`<div class="callout accent"><strong>No images found.</strong> This graph has no image expressions.</div>`;
+    h+=`</section>`;
+    return h;
+  }
+  h+=`<div class="card open" id="card-images"><div class="card-header" onclick="toggleCard('card-images')"><h3>Images (${images.length})</h3>${chevSvg}</div><div class="card-body">`;
+  h+=`<div class="img-gallery">`;
+  for(const it of images){
+    const srcEsc=(it.image_url||'').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const thumb=srcEsc?`<img src="${srcEsc}" alt="Image" loading="lazy">`:'<span style="color:var(--text-muted);font-style:italic">no preview</span>';
+    const details=[];
+    if(it.line!=null)details.push(`line ${it.line}`);
+    if(it.draggable)details.push('draggable');
+    if(it.hidden)details.push('hidden');
+    if(it.name)details.push(H(it.name));
+    if(it.description)details.push(H(it.description));
+    const caption=details.length>0?details.join(' · '):'—';
+    h+=`<div class="img-gallery-item"${it.hidden?' style="opacity:0.5"':''}>`;
+    h+=`<div class="img-frame">${thumb}</div>`;
+    h+=`<div class="img-caption">${caption}${it.hidden?' <span class="badge" style="font-size:0.55rem;background:var(--surface);opacity:0.7">hidden</span>':''}</div>`;
+    h+=`</div>`;
+  }
+  h+=`</div></div></div></section>`;
+  return h;
+}
+
+function genUnstoredValuesSection(a){
+  const values=findUnstoredValues(a);
+
+  let h=`<section id="sec-unstored-values"><h2><span class="section-icon">&#128260;</span> Unstored Values</h2>`;
+  h+=`<p class="desc">Function calls whose result is not stored in a variable (e.g. <code>f(x)</code> in <code>y = f(x) + 1</code>), and numerical display expressions (e.g. <code>5</code>, <code>\\pi</code>) shown without assignment. Non-numeric display expressions and polygon calls are in the Polygons &amp; Graph Objects section. Storing results in variables can improve performance when the computation is expensive or repeated.</p>`;
+
+  if(values.length===0){
+    h+=`<div class="callout green"><strong>No unstored values found.</strong> Every computed result is stored in a variable.</div>`;
     h+=`</section>`;
     return h;
   }
 
-  const sevClass=totalCost>30?'critical':totalCost>10?'high':totalCost>3?'medium':'low';
-  h+=`<div class="callout ${sevClass==='critical'||sevClass==='high'?'orange':'accent'}">`;
-  h+=`<strong>${calls.length} unstored call${calls.length>1?'s':''}</strong> found, consuming <strong>${totalCost.toFixed(1)}</strong> total cost. `;
-  if(totalCost>10) h+=`Storing these in variables would noticeably improve performance.`;
-  else h+=`Impact is minor, but storing results can reduce redundant computation.`;
-  h+=`</div>`;
-
-  h+=`<div class="card open" id="card-unstored-calls"><div class="card-header" onclick="toggleCard('card-unstored-calls')"><h3>Unstored Calls (${calls.length}) &mdash; ${totalCost.toFixed(1)} cost</h3>${chevSvg}</div><div class="card-body">`;
-  h+=`<table class="pattern-table"><thead><tr><th>Call</th><th>In Expression</th><th>Cost</th><th>Depends On</th><th>LaTeX</th></tr></thead><tbody>`;
+  h+=`<div class="card open" id="card-unstored-values"><div class="card-header" onclick="toggleCard('card-unstored-values')"><h3>Unstored Values (${values.length})</h3>${chevSvg}</div><div class="card-body">`;
+  h+=`<table class="pattern-table"><thead><tr><th>Type</th><th>Expression / Call</th><th>In Expression</th><th>Impact</th><th>Depends On</th><th>LaTeX</th></tr></thead><tbody>`;
 
   const lm=a.lineMap||{};
   const LIM=40;
-  for(let i=0;i<calls.length;i++){
-    const u=calls[i];
+  for(let i=0;i<values.length;i++){
+    const u=values[i];
     const hidden=i>=LIM;
-    const cc=u.cost>8?'var(--red)':u.cost>3?'var(--orange)':'var(--text-muted)';
-    const argVars=u.call?.argVars?[...new Set(u.call.argVars.flat())]:[];
-    const deps=argVars.length>0?argVars.slice(0,4).map(v=>eiRef(v,lm[v])).join(', ')+(argVars.length>4?' +<span style="opacity:0.6">'+(argVars.length-4)+' more</span>':''):'<span style="color:var(--text-muted);font-style:italic">none</span>';
+    const sev=costSeverity(u.cost);
+    const typeLabel=u.kind==='function_call'?'function call':'display';
+    const depList=u.kind==='function_call'?(u.call?.argVars?[...new Set(u.call.argVars.flat())]:[]):(u.dependsOn||[]);
+    const depsStr=depList.length>0?depList.slice(0,4).map(d=>eiRef(d,lm[d])).join(', ')+(depList.length>4?' +<span style="opacity:0.6">'+(depList.length-4)+' more</span>':''):'<span style="color:var(--text-muted);font-style:italic">none</span>';
     const trStyle=hidden?'display:none':(u.hidden?'opacity:0.5':'');
-    if(i===LIM) h+=`<tr id="unstored-more-row" class="reveal-more-p"><td colspan="5" style="text-align:center;color:var(--text-muted);font-size:0.8rem"><a href="#" onclick="revealMoreRows('unstored-more-row');return false" style="color:var(--accent)">Show all ${calls.length-LIM} more</a></td></tr>`;
+    if(i===LIM) h+=`<tr id="unstored-more-row" class="reveal-more-p"><td colspan="6" style="text-align:center;color:var(--text-muted);font-size:0.8rem"><a href="#" onclick="revealMoreRows('unstored-more-row');return false" style="color:var(--accent)">Show all ${values.length-LIM} more</a></td></tr>`;
     h+=`<tr${hidden?' class="reveal-row"':''}${trStyle?' style="'+trStyle+'"':''}>`;
+    h+=`<td><span class="badge" style="font-size:0.65rem;background:var(--surface)">${typeLabel}</span></td>`;
     h+=`<td>${latexEl(u.latex,u.line)}${u.line!=null?` <span style="color:var(--text-muted);font-size:0.8em">(line ${u.line})</span>`:''}</td>`;
-    h+=`<td>${u.inExpr?eiRef(u.inExpr,lm[u.inExpr]):'<span style="color:var(--text-muted);font-style:italic">Unstored</span>'}</td>`;
-    h+=`<td style="font-family:var(--mono);color:${cc}">${u.cost.toFixed(1)}</td>`;
-    h+=`<td style="font-size:0.78rem">${deps}</td>`;
+    h+=`<td>${u.inExpr?eiRef(u.inExpr,lm[u.inExpr]):'<span style="color:var(--text-muted);font-style:italic">—</span>'}</td>`;
+    h+=`<td><span class="cost-dot cost-${sev}" title="${sev}"></span></td>`;
+    h+=`<td style="font-size:0.78rem">${depsStr}</td>`;
     h+=`<td>${latexEl(u.latex,u.line)}</td>`;
     h+=`</tr>`;
   }
@@ -1146,32 +1471,28 @@ function genUnstoredCallsSection(a){
 
 function genUnusedSection(a){
   const unused=findUnused(a);
-  const totalCost=unused.reduce((s,u)=>s+u.cost,0);
 
   let h=`<section id="sec-unused"><h2><span class="section-icon">&#128465;</span> Unused Expressions</h2>`;
-  h+=`<p class="desc">Named variables and functions that are defined but never referenced; and numerical values (e.g. <code>5</code>, <code>\\pi</code>) displayed without being stored. These can be removed or consolidated into variables for reuse.</p>`;
+  h+=`<p class="desc">Named variables and functions that are defined but never referenced elsewhere in the expressions list. These may be removed or consolidated into variables for reuse. Numerical values displayed without assignment appear in the Unstored Values section.</p>`;
 
   if(unused.length===0){
-    h+=`<div class="callout green"><strong>No unused expressions found.</strong> Every named definition is referenced and no inline numerical values.</div>`;
+    h+=`<div class="callout green"><strong>No unused expressions found.</strong> Every named definition is referenced.</div>`;
     h+=`</section>`;
     return h;
   }
 
-  const sevClass=totalCost>30?'critical':totalCost>10?'high':totalCost>3?'medium':'low';
-  h+=`<div class="callout ${sevClass==='critical'||sevClass==='high'?'orange':'accent'}">`;
-  h+=`<strong>${unused.length} unused expression${unused.length>1?'s':''}</strong> found, consuming <strong>${totalCost.toFixed(1)}</strong> total cost. `;
-  if(totalCost>10) h+=`Removing these would noticeably improve performance.`;
-  else h+=`Impact is minor, but cleaning them up reduces clutter.`;
+  h+=`<div class="callout accent">`;
+  h+=`<strong>Please verify manually before removing expressions.</strong> This analysis may not capture all references. Expressions listed here may still be used in the Computation Layer (CL), in various property fields within the graph (such as color, label, or style settings), or in other contexts not detected by this tool. Confirm that an expression is unused before removing it.`;
   h+=`</div>`;
 
-  h+=`<div class="card open" id="card-unused"><div class="card-header" onclick="toggleCard('card-unused')"><h3>Unused Definitions (${unused.length}) &mdash; ${totalCost.toFixed(1)} wasted cost</h3>${chevSvg}</div><div class="card-body">`;
-  h+=`<table class="pattern-table"><thead><tr><th>Name / Value</th><th>Type</th><th>Cost</th><th>Depends On</th><th>Style</th><th>LaTeX</th></tr></thead><tbody>`;
+  h+=`<div class="card open" id="card-unused"><div class="card-header" onclick="toggleCard('card-unused')"><h3>Unused Definitions (${unused.length})</h3>${chevSvg}</div><div class="card-body">`;
+  h+=`<table class="pattern-table"><thead><tr><th>Name / Value</th><th>Type</th><th>Impact</th><th>Depends On</th><th>Style</th><th>LaTeX</th></tr></thead><tbody>`;
 
   const LIM=40;
   for(let i=0;i<unused.length;i++){
     const u=unused[i];
     const hidden=i>=LIM;
-    const cc=u.cost>8?'var(--red)':u.cost>3?'var(--orange)':'var(--text-muted)';
+    const sev=costSeverity(u.cost);
     const type=u.kind==='inline_number'?'inline number':u.isFunc?'function':'variable';
     const lm=a.lineMap||{};
     const deps=u.dependsOn.length>0?u.dependsOn.slice(0,4).map(d=>eiRef(d,lm[d])).join(', ')+(u.dependsOn.length>4?' +<span style="opacity:0.6">'+(u.dependsOn.length-4)+' more</span>':''):'<span style="color:var(--text-muted);font-style:italic">none</span>';
@@ -1185,7 +1506,7 @@ function genUnusedSection(a){
     h+=`<tr${hidden?' class="reveal-row"':''}${trStyle?' style="'+trStyle+'"':''}>`;
     h+=`<td>${nameCell}${u.hidden?' <span class="badge" style="font-size:0.6rem;background:var(--surface);opacity:0.7">hidden</span>':''}</td>`;
     h+=`<td><span class="badge" style="font-size:0.7rem;background:var(--surface)">${type}</span></td>`;
-    h+=`<td style="font-family:var(--mono);color:${cc}">${u.cost.toFixed(1)}</td>`;
+    h+=`<td><span class="cost-dot cost-${sev}" title="${sev}"></span></td>`;
     h+=`<td style="font-size:0.78rem">${deps}</td>`;
     h+=`<td style="font-size:0.72rem;color:var(--text-muted)">${styleStr?H(styleStr):'—'}</td>`;
     h+=`<td>${latexEl(u.latex,u.line)}</td>`;
@@ -1230,12 +1551,8 @@ function getVisibleNodes(dep,max){
   return{nodes:new Set(all.slice(0,max)),filtered:true,total:all.length};
 }
 
-function nodeColor(cost){
-  if(cost>20)return{bg:'var(--red-glow)',border:'var(--red)',text:'var(--red)'};
-  if(cost>8)return{bg:'var(--orange-glow)',border:'var(--orange)',text:'var(--orange)'};
-  if(cost>3)return{bg:'var(--yellow-glow)',border:'var(--yellow)',text:'var(--yellow)'};
-  return{bg:'var(--surface-hover)',border:'var(--border)',text:'var(--text-muted)'};
-}
+const SEVERITY_STYLES={critical:{bg:'var(--red-glow)',border:'var(--red)',text:'var(--red)'},high:{bg:'var(--orange-glow)',border:'var(--orange)',text:'var(--orange)'},medium:{bg:'var(--yellow-glow)',border:'var(--yellow)',text:'var(--yellow)'},low:{bg:'var(--surface-hover)',border:'var(--border)',text:'var(--text-muted)'}};
+function nodeColor(cost){return SEVERITY_STYLES[costSeverity(cost)];}
 
 function genFullTreeSection(a){
   let h=`<section id="sec-tree"><h2><span class="section-icon">&#127795;</span> Dependency Concept Map</h2>`;
@@ -1254,11 +1571,11 @@ function genFullTreeSection(a){
   if(filtered) h+=`<div class="callout accent" style="margin-bottom:1rem"><strong>Showing ${visible.size} of ${total} expressions.</strong> Lower-impact expressions are hidden. Use the search box to find any expression.</div>`;
 
   h+=`<div class="map-legend">`;
-  h+=`<span style="font-weight:600;font-size:0.72rem">COST:</span>`;
-  h+=`<div class="map-legend-item"><div class="map-legend-swatch" style="background:var(--red-glow);border-color:var(--red)"></div>Critical (&gt;20)</div>`;
-  h+=`<div class="map-legend-item"><div class="map-legend-swatch" style="background:var(--orange-glow);border-color:var(--orange)"></div>High (&gt;8)</div>`;
-  h+=`<div class="map-legend-item"><div class="map-legend-swatch" style="background:var(--yellow-glow);border-color:var(--yellow)"></div>Medium (&gt;3)</div>`;
-  h+=`<div class="map-legend-item"><div class="map-legend-swatch" style="background:var(--surface-hover);border-color:var(--border)"></div>Low</div>`;
+  h+=`<span style="font-weight:600;font-size:0.72rem">IMPACT:</span>`;
+  h+=`<div class="map-legend-item"><div class="map-legend-swatch cost-dot cost-critical"></div>Critical</div>`;
+  h+=`<div class="map-legend-item"><div class="map-legend-swatch cost-dot cost-high"></div>High</div>`;
+  h+=`<div class="map-legend-item"><div class="map-legend-swatch cost-dot cost-medium"></div>Medium</div>`;
+  h+=`<div class="map-legend-item"><div class="map-legend-swatch cost-dot cost-low"></div>Low</div>`;
   h+=`</div>`;
 
   h+=`<div class="concept-map" id="concept-map"><svg class="edge-svg" id="edge-svg"></svg>`;
@@ -1280,7 +1597,7 @@ function genFullTreeSection(a){
       if(p?.isImplicit)tags+=`<span class="node-tag" style="background:rgba(92,200,212,0.15);color:var(--teal)">implicit</span>`;
       if(p?.isRec)tags+=`<span class="node-tag" style="background:var(--red-glow);color:var(--red)">rec</span>`;
       const eName=name.replace(/'/g,"\\'");
-      h+=`<div class="map-node" data-name="${H(name)}" style="background:${nc.bg};border-color:${nc.border};color:${nc.text}" onclick="selectNode('${eName}')">${latexEl(name,lm[name])}${lm[name]!=null?` <span style="color:var(--text-muted);font-size:0.75em">(line ${lm[name]})</span>`:''} <span class="node-cost">${cost.toFixed(1)}</span>${tags}</div>`;
+      h+=`<div class="map-node" data-name="${H(name)}" style="background:${nc.bg};border-color:${nc.border};color:${nc.text}" onclick="selectNode('${eName}')">${latexEl(name,lm[name])}${lm[name]!=null?` <span style="color:var(--text-muted);font-size:0.75em">(line ${lm[name]})</span>`:''} <span class="cost-dot cost-${costSeverity(cost)}" title="${costSeverity(cost)}"></span>${tags}</div>`;
     }
     h+=`</div>`;
   }
@@ -1297,12 +1614,31 @@ function genReport(a,graphUrl){
   _analysis=a;
   let html='';
   const urlLink=graphUrl?` &mdash; <a href="${H(graphUrl)}" target="_blank">${H(graphUrl.split('/').pop())}</a>`:'';
+  const tocHtml=`<aside class="toc-sidebar"><div class="toc-label">Sections</div><div class="toc">
+  <a href="#sec-heavy"><span class="num">1</span> Heavy Expressions</a>
+  <a href="#sec-reuse"><span class="num">2</span> Reusable Patterns</a>
+  <a href="#sec-interact"><span class="num">3</span> Interactive Dependencies</a>
+  <a href="#sec-implicit"><span class="num">4</span> Implicit Expressions and Regressions</a>
+  <a href="#sec-polygons"><span class="num">5</span> Polygons &amp; Graph Objects</a>
+  <a href="#sec-images"><span class="num">6</span> Images</a>
+  <a href="#sec-labels"><span class="num">7</span> Labels</a>
+  <a href="#sec-custom-fns"><span class="num">8</span> Custom Functions and Booleans</a>
+  <a href="#sec-actions"><span class="num">9</span> Actions</a>
+  <a href="#sec-unused"><span class="num">10</span> Unused Expressions</a>
+  <a href="#sec-unstored-values"><span class="num">11</span> Unstored Values</a>
+  <a href="#sec-tree"><span class="num">12</span> Dependency Concept Map</a>
+  <a href="#sec-other"><span class="num">13</span> Other Items</a>
+</div></aside>`;
+  html+=`<div class="report-layout">${tocHtml}<main class="report-content">`;
   html+=`<header><h1>Focused Graph Analysis</h1><p class="subtitle">Performance diagnostics${urlLink}</p></header>`;
 
-  const heavyCount=a.exprs.filter(e=>eCost(e.p)>=COST_THRESHOLD).length;
+  const heavyCount=a.exprs.filter(e=>!hasPolygon(e.latex)&&eCost(e.p)>=COST_THRESHOLD).length;
   const unusedList=findUnused(a);
   const unusedCount=unusedList.length;
-  const unstoredCallsCount=findUnstoredCalls(a).length;
+  const unstoredValuesCount=findUnstoredValues(a).length;
+  const polygonCount=findPolygonExpressions(a).length;
+  const imageCount=findImageItems(a).length;
+  const labelCount=findLabelExpressions(a).length;
   const implicitCount=findImplicitFunctions(a).length;
   const actionsCount=findActions(a).length;
   const otherCount=findOtherItems(a).length;
@@ -1310,40 +1646,34 @@ function genReport(a,graphUrl){
     {v:a.m.expr,l:'Total Expressions',c:'accent'},
     {v:heavyCount,l:'Heavy Expressions',c:heavyCount>5?'red':heavyCount>0?'orange':'teal'},
     {v:a.interactables.length,l:'Interactive Elements',c:a.interactables.length>3?'orange':'teal'},
-    {v:implicitCount,l:'Implicit Functions',c:'teal'},
+    {v:implicitCount,l:'Implicit & Regressions',c:'teal'},
     {v:actionsCount,l:'Actions',c:'teal'},
     {v:unusedCount,l:'Unused Definitions',c:unusedCount>5?'orange':unusedCount>0?'yellow':'green'},
-    {v:unstoredCallsCount,l:'Unstored Calls',c:unstoredCallsCount>5?'orange':unstoredCallsCount>0?'yellow':'green'},
+    {v:unstoredValuesCount,l:'Unstored Values',c:unstoredValuesCount>5?'orange':unstoredValuesCount>0?'yellow':'green'},
+    {v:polygonCount,l:'Polygons',c:'teal'},
+    {v:imageCount,l:'Images',c:'teal'},
+    {v:labelCount,l:'Labels',c:'teal'},
     {v:otherCount,l:'Other Items',c:'teal'},
-    {v:a.m.fn,l:'Custom Functions',c:'accent'}
+    {v:findCustomFunctions(a).length,l:'Custom Fns & Booleans',c:'accent'}
   ];
   html+=`<div class="summary-grid">${stats.map(s=>`<div class="stat-card ${s.c}"><div class="value">${s.v}</div><div class="label">${H(s.l)}</div></div>`).join('')}</div>`;
-
-  html+=`<div class="toc">`;
-  html+=`<a href="#sec-heavy"><span class="num">1</span> Heavy Expressions</a>`;
-  html+=`<a href="#sec-reuse"><span class="num">2</span> Reusable Patterns</a>`;
-  html+=`<a href="#sec-interact"><span class="num">3</span> Interactive Dependencies</a>`;
-  html+=`<a href="#sec-implicit"><span class="num">4</span> Implicit Functions</a>`;
-  html+=`<a href="#sec-custom-fns"><span class="num">5</span> Custom Functions</a>`;
-  html+=`<a href="#sec-actions"><span class="num">6</span> Actions</a>`;
-  html+=`<a href="#sec-unused"><span class="num">7</span> Unused Expressions</a>`;
-  html+=`<a href="#sec-unstored-calls"><span class="num">8</span> Unstored Function Calls</a>`;
-  html+=`<a href="#sec-tree"><span class="num">9</span> Dependency Concept Map</a>`;
-  html+=`<a href="#sec-other"><span class="num">10</span> Other Items</a>`;
-  html+=`</div>`;
 
   html+=genHeavySection(a);
   html+=genReusableSection(a);
   html+=genInteractableSection(a);
   html+=genImplicitSection(a);
+  html+=genPolygonSection(a);
+  html+=genImagesSection(a);
+  html+=genLabelsSection(a);
   html+=genCustomFunctionsSection(a);
   html+=genActionsSection(a);
   html+=genUnusedSection(a);
-  html+=genUnstoredCallsSection(a);
+  html+=genUnstoredValuesSection(a);
   html+=genFullTreeSection(a);
   html+=genOtherExpressionsSection(a);
 
   html+=`<footer>Focused Graph Analysis &middot; <a href="analysis2.html">General Analyzer v2</a> &middot; <a href="cost-analysis.html">Cost Methodology</a> &middot; <a href="compare.html">Graph Comparator</a></footer>`;
+  html+=`</main></div>`;
   return html;
 }
 
@@ -1405,7 +1735,7 @@ function selectNode(name){
 function showNodeDetail(name){
   const dep=_analysis.dep,p=dep.def[name];if(!p)return;
   const cost=eCost(p);
-  const cc=cost>20?'var(--red)':cost>8?'var(--orange)':cost>3?'var(--yellow)':'var(--text-muted)';
+  const sev=costSeverity(cost);
   const up=[...(dep.on[name]||[])].sort((a,b)=>eCost(dep.def[b])-eCost(dep.def[a]));
   const dn=[...(dep.by[name]||[])].sort((a,b)=>eCost(dep.def[b])-eCost(dep.def[a]));
   const upAll=dep.transUp(name);upAll.delete(name);
@@ -1414,9 +1744,9 @@ function showNodeDetail(name){
   const lm=_analysis?.lineMap||{};
   let h=`<div class="node-detail"><div class="nd-header">`;
   const sig=p.isFunc?name+'('+p.params.join(', ')+')':name;
-  h+=`<span class="nd-name" style="color:${cc}">${latexEl(sig,lm[name])}${lm[name]!=null?` <span style="color:var(--text-muted);font-size:0.8em">(line ${lm[name]})</span>`:''}</span>`;
+  h+=`<span class="nd-name cost-${sev}">${latexEl(sig,lm[name])}${lm[name]!=null?` <span style="color:var(--text-muted);font-size:0.8em">(line ${lm[name]})</span>`:''}</span>`;
   h+=`<div style="display:flex;align-items:center;gap:0.5rem">`;
-  h+=`<span class="cost-pill" style="background:${cc.replace('var(--','rgba(').replace(')',',0.15)')};color:${cc}">${cost.toFixed(1)}</span>`;
+  h+=`<span class="cost-dot cost-${sev}" title="${sev}"></span>`;
   h+=`<button class="nd-close" onclick="clearSelection()" title="Clear selection">✕</button>`;
   h+=`</div></div>`;
   if(p.latex)h+=`<div class="nd-latex">${latexEl(p.latex,lm[name])}</div>`;
@@ -1429,8 +1759,8 @@ function showNodeDetail(name){
   h+=`<div class="nd-deps"><div class="nd-dep-col"><h5>↑ Depends on (${up.length})</h5>`;
   if(up.length>0){
     for(const u of up.slice(0,15)){
-      const uc=eCost(dep.def[u]),ucc=uc>20?'var(--red)':uc>8?'var(--orange)':uc>3?'var(--yellow)':'var(--text-muted)';
-      h+=`<div class="nd-dep-item"><span class="expr-inline dep-link" onclick="selectNode('${u.replace(/'/g,"\\'")}')">${latexEl(u,lm[u])}${lm[u]!=null?` <span style="color:var(--text-muted);font-size:0.8em">(line ${lm[u]})</span>`:''}</span><span class="dep-cost" style="color:${ucc}">${uc.toFixed(1)}</span></div>`;
+      const uc=eCost(dep.def[u]),usc=costSeverity(uc);
+      h+=`<div class="nd-dep-item"><span class="expr-inline dep-link" onclick="selectNode('${u.replace(/'/g,"\\'")}')">${latexEl(u,lm[u])}${lm[u]!=null?` <span style="color:var(--text-muted);font-size:0.8em">(line ${lm[u]})</span>`:''}</span><span class="cost-dot cost-${usc}" title="${usc}"></span></div>`;
     }
     if(up.length>15)h+=`<div style="font-size:0.75rem;color:var(--text-muted)">+${up.length-15} more</div>`;
   } else h+=`<div style="font-size:0.78rem;color:var(--text-muted);font-style:italic">Root — no dependencies</div>`;
@@ -1439,8 +1769,8 @@ function showNodeDetail(name){
   h+=`<div class="nd-dep-col"><h5>↓ Depended on by (${dn.length})</h5>`;
   if(dn.length>0){
     for(const d of dn.slice(0,15)){
-      const dc=eCost(dep.def[d]),dcc=dc>20?'var(--red)':dc>8?'var(--orange)':dc>3?'var(--yellow)':'var(--text-muted)';
-      h+=`<div class="nd-dep-item"><span class="expr-inline dep-link" onclick="selectNode('${d.replace(/'/g,"\\'")}')">${latexEl(d,lm[d])}${lm[d]!=null?` <span style="color:var(--text-muted);font-size:0.8em">(line ${lm[d]})</span>`:''}</span><span class="dep-cost" style="color:${dcc}">${dc.toFixed(1)}</span></div>`;
+      const dc=eCost(dep.def[d]),dsc=costSeverity(dc);
+      h+=`<div class="nd-dep-item"><span class="expr-inline dep-link" onclick="selectNode('${d.replace(/'/g,"\\'")}')">${latexEl(d,lm[d])}${lm[d]!=null?` <span style="color:var(--text-muted);font-size:0.8em">(line ${lm[d]})</span>`:''}</span><span class="cost-dot cost-${dsc}" title="${dsc}"></span></div>`;
     }
     if(dn.length>15)h+=`<div style="font-size:0.75rem;color:var(--text-muted)">+${dn.length-15} more</div>`;
   } else h+=`<div style="font-size:0.78rem;color:var(--text-muted);font-style:italic">Leaf — nothing depends on this</div>`;
